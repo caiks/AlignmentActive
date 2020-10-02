@@ -15,33 +15,71 @@
 
 using namespace Alignment;
 
-#define UNLOG ; log_str.flush(); log(log_str.str());}
+
+void log_default(const std::string& str)
+{
+	std::cout << str << std::endl;
+	return;
+};
+
+Active::Active() : terminate(false), log_f(log_default), historyOverflow(false), historyEvent(0), applicationFudId(0), applicationFudIdPersistent(0)
+{
+}
+
+#define UNLOG ; log_str.flush(); this->log_f(log_str.str());}
 #define LOG { std::ostringstream log_str; log_str <<
 
-Active::Active() : terminate(false), historyOverflow(false), historyEvent(0), applicationFudId(0), applicationFudIdPersistent(0)
+bool Alignment::Active::log()
 {
-}
-
-void Alignment::activesLog(Active& act, void (*log)(const std::string&))
-{
-	std::lock_guard<std::mutex> guard(act.mutex);
+	bool ok = true;
+	if (this->terminate)
+		return true;
+	std::lock_guard<std::recursive_mutex> guard(this->mutex);
 	
-	LOG "active terminate: " << (act.terminate ? "true" : "false") UNLOG
-	LOG "active underlying system size: " << (act.systemUnder ? act.systemUnder->listVarSizePair.size() : 0) UNLOG
-	LOG "active system size: " << (act.system ? act.system->listVarSizePair.size() : 0) UNLOG		
-	LOG "active history dimension: " << (act.history ? act.history->dimension : 0) UNLOG		
-	LOG "active history size: " << (act.history ? act.history->size : 0) UNLOG	
-	LOG "active history overflow: " << (act.history && act.historyOverflow ? "true" : "false") UNLOG	
-	LOG "active history event: " << (act.history ? act.historyEvent : 0) UNLOG	
-	LOG "active underlying model size: " << (act.applicationUnder ? fudRepasSize(*act.applicationUnder->fud) : 0)  UNLOG	
-	LOG "active underlying model underlying size: " << (act.applicationUnder ? fudRepasUnderlying(*act.applicationUnder->fud)->size() : 0)  UNLOG	
-	LOG "active underlying model slices size: " << (act.applicationUnder ? treesSize(*act.applicationUnder->slices) : 0)  UNLOG	
-	LOG "active underlying model leaf slices size: " << (act.applicationUnder ? treesLeafElements(*act.applicationUnder->slices)->size() : 0)  UNLOG
-	LOG "active model size: " << (act.application ? fudRepasSize(*act.application->fud) : 0)  UNLOG	
-	LOG "active model underlying size: " << (act.application ? fudRepasUnderlying(*act.application->fud)->size() : 0)  UNLOG	
-	LOG "active model slices size: " << (act.application ? treesSize(*act.application->slices) : 0)  UNLOG	
-	LOG "active model leaf slices size: " << (act.application ? treesLeafElements(*act.application->slices)->size() : 0)  UNLOG
-	LOG "active persistent fud id: " << act.applicationFudIdPersistent  UNLOG
-	LOG "active fud id: " << act.applicationFudId  UNLOG
+	try {
+		
+		LOG "active terminate: " << (this->terminate ? "true" : "false") UNLOG
+		LOG "active underlying system size: " << (this->systemUnder ? this->systemUnder->listVarSizePair.size() : 0) UNLOG
+		LOG "active system size: " << (this->system ? this->system->listVarSizePair.size() : 0) UNLOG		
+		LOG "active history dimension: " << (this->history ? this->history->dimension : 0) UNLOG		
+		LOG "active history size: " << (this->history ? this->history->size : 0) UNLOG	
+		LOG "active history overflow: " << (this->history && this->historyOverflow ? "true" : "false") UNLOG	
+		LOG "active history event: " << (this->history ? this->historyEvent : 0) UNLOG	
+		LOG "active underlying model size: " << (this->applicationUnder ? fudRepasSize(*this->applicationUnder->fud) : 0)  UNLOG	
+		LOG "active underlying model underlying size: " << (this->applicationUnder ? fudRepasUnderlying(*this->applicationUnder->fud)->size() : 0)  UNLOG	
+		LOG "active underlying model slices size: " << (this->applicationUnder ? treesSize(*this->applicationUnder->slices) : 0)  UNLOG	
+		LOG "active underlying model leaf slices size: " << (this->applicationUnder ? treesLeafElements(*this->applicationUnder->slices)->size() : 0)  UNLOG
+		LOG "active model size: " << (this->application ? fudRepasSize(*this->application->fud) : 0)  UNLOG	
+		LOG "active model underlying size: " << (this->application ? fudRepasUnderlying(*this->application->fud)->size() : 0)  UNLOG	
+		LOG "active model slices size: " << (this->application ? treesSize(*this->application->slices) : 0)  UNLOG	
+		LOG "active model leaf slices size: " << (this->application ? treesLeafElements(*this->application->slices)->size() : 0)  UNLOG
+		LOG "active persistent fud id: " << this->applicationFudIdPersistent  UNLOG
+		LOG "active fud id: " << this->applicationFudId  UNLOG	
+	} 
+	catch (const std::exception& e) 
+	{
+		LOG "active log error: " << e.what()  UNLOG
+		ok = false;
+	}
+	
+	return ok;
 }
 
+bool Alignment::Active::slicesSync()
+{
+	bool ok = true;
+	if (this->terminate)
+		return true;
+	std::lock_guard<std::recursive_mutex> guard(this->mutex);
+	
+	try {
+
+	} 
+	catch (const std::exception& e) 
+	{
+		LOG "active slicesSync error: " << e.what()  UNLOG
+		ok = false;
+	}
+	
+	return ok;
+}

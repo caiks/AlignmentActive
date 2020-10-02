@@ -38,35 +38,40 @@ int main(int argc, char **argv)
 			return;
 		};
 		
-		Active active;
-		activesLog(active,log);
+		ECHO(Active active);
+		TRUTH(active.log());
 	}
 	
 	if (true)
 	{
 		auto log = [](const std::string& str)
 		{
-			std::cout << str << std::endl;
+			std::cout << ">>> " << str << std::endl;
 			return;
 		};
 		
-		auto reporter = [](Active& act, void (*log)(const std::string&), std::size_t sleep)
+		ECHO(Active active);
+		active.log_f = log;
+		TRUTH(active.log());
+	}
+	
+	if (false)
+	{
+		auto reporter = [](Active& act, std::size_t sleep)
 		{
 			while (!act.terminate)
 			{
-				activesLog(act,log);				
+				TRUTH(act.log());			
 				std::this_thread::sleep_for(std::chrono::milliseconds(sleep));
 			}
 			return;
 		};
 		
-		Active active;
-		cout << "starting" << endl;
-		std::thread t1(reporter, std::ref(active), log, 2000);
+		ECHO(Active active);
+		std::thread t1(reporter, std::ref(active), 2000);
 		std::this_thread::sleep_for(std::chrono::milliseconds(9000));
 		active.terminate = true;
-		t1.join();
-		cout << "finished" << endl;
+		ECHO(t1.join());
 	}
 	
 	return 0;

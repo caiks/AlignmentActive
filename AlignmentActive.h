@@ -14,8 +14,10 @@ namespace Alignment
 	{
 		Active();
 		
-		std::mutex mutex;
 		bool terminate;
+		void (*log_f)(const std::string&);
+		
+		std::recursive_mutex mutex;
 		
 		std::shared_ptr<SystemRepa> systemUnder;
 		std::shared_ptr<SystemRepa> system;
@@ -31,9 +33,12 @@ namespace Alignment
 		
 		SizeList eventsSlice;
 		SizeSizeSetMap slicesSetEvent;
+		
+		bool log();
+		bool slicesSync();
 	};
 
-	void activesLog(Active&, void (*log)(const std::string&));
+	
 }
 
 #endif
