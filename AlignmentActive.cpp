@@ -34,9 +34,9 @@ bool Alignment::Active::log()
 	bool ok = true;
 	if (this->terminate)
 		return true;
-	std::lock_guard<std::recursive_mutex> guard(this->mutex);
 	
 	try {
+		std::lock_guard<std::recursive_mutex> guard(this->mutex);
 		
 		LOG "active terminate: " << (this->terminate ? "true" : "false") UNLOG
 		LOG "active underlying system size: " << (this->systemUnder ? this->systemUnder->listVarSizePair.size() : 0) UNLOG
@@ -65,14 +65,17 @@ bool Alignment::Active::log()
 	return ok;
 }
 
-bool Alignment::Active::slicesSync()
+bool Alignment::Active::slicesSync(std::size_t tint)
 {
+	auto frmul = historyRepasFudRepasMultiply_up;
+
+
 	bool ok = true;
 	if (this->terminate)
 		return true;
-	std::lock_guard<std::recursive_mutex> guard(this->mutex);
 	
 	try {
+		std::lock_guard<std::recursive_mutex> guard(this->mutex);
 
 	} 
 	catch (const std::exception& e) 
