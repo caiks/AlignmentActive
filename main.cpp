@@ -31,15 +31,9 @@ using namespace std;
 int main(int argc, char **argv)
 {
 	if (false)
-	{
-		auto log = [](const std::string& str)
-		{
-			std::cout << str << std::endl;
-			return;
-		};
-		
+	{		
 		ECHO(Active active);
-		TRUTH(active.log());
+		TRUTH(active.report());
 	}
 	
 	if (true)
@@ -51,8 +45,8 @@ int main(int argc, char **argv)
 		};
 		
 		ECHO(Active active);
-		active.log_f = log;
-		TRUTH(active.log());
+		active.log = log;
+		TRUTH(active.report());
 	}
 	
 	if (false)
@@ -61,7 +55,7 @@ int main(int argc, char **argv)
 		{
 			while (!act.terminate)
 			{
-				TRUTH(act.log());			
+				TRUTH(act.report());			
 				std::this_thread::sleep_for(std::chrono::milliseconds(sleep));
 			}
 			return;

@@ -15,7 +15,7 @@ namespace Alignment
 		Active();
 		
 		bool terminate;
-		void (*log_f)(const std::string&);
+		void (*log)(const std::string&);
 		
 		std::shared_ptr<SystemRepa> systemUnder;
 		std::shared_ptr<ApplicationRepa> applicationUnder;
@@ -35,8 +35,8 @@ namespace Alignment
 		SizeList eventsSlice;
 		SizeSizeSetMap slicesSetEvent;
 		
-		bool log();
-		bool slicesSync();
+		bool report();
+		bool slicesSync(std::size_t tint = 1);
 	};
 
 	
