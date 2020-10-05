@@ -17,17 +17,17 @@ namespace Alignment
 		bool terminate;
 		void (*log)(const std::string&);
 		
-		std::shared_ptr<SystemRepa> systemUnder;
-		std::shared_ptr<ApplicationRepa> applicationUnder;
-
 		std::recursive_mutex mutex;
 		
+		std::shared_ptr<SystemRepa> systemUnder;
 		std::shared_ptr<SystemRepa> system;
 		
 		std::shared_ptr<HistoryRepa> history;
 		bool historyOverflow;
 		std::size_t historyEvent;
+		std::size_t size() const;
 		
+		std::shared_ptr<ApplicationRepa> applicationUnder;
 		std::shared_ptr<ApplicationRepa> application;
 		std::size_t applicationFudIdPersistent;
 		std::size_t applicationFudId;

@@ -15,11 +15,11 @@ include_directories(../rapidjson/include ../AlignmentC ../AlignmentRepaC)
 
 add_library(AlignmentActive AlignmentActive.cpp)
 
-add_executable(main main.cpp)
+add_executable(AlignmentActive_test main.cpp)
 
-target_link_libraries(main PUBLIC AlignmentActive AlignmentRepaC AlignmentC Threads::Threads)
+target_link_libraries(AlignmentActive_test PUBLIC AlignmentActive AlignmentRepaC AlignmentC Threads::Threads)
 
-target_include_directories(main PUBLIC "${PROJECT_BINARY_DIR}")
+target_include_directories(AlignmentActive_test PUBLIC "${PROJECT_BINARY_DIR}")
 
-install(TARGETS main DESTINATION lib)
+install(TARGETS AlignmentActive_test DESTINATION lib)
 install(FILES AlignmentActive.h DESTINATION include)

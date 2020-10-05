@@ -48,7 +48,7 @@ Ubuntu -
 cd ..
 mkdir -p AlignmentActive_ws
 cd AlignmentActive_ws
-ln -s ../AlignmentActive_build/main main
+ln -s ../AlignmentActive_build/AlignmentRepaC_test main
 ./main
 
 ```
