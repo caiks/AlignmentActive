@@ -65,6 +65,7 @@ bool Alignment::Active::report()
 		LOG "report\tfud id: " << this->applicationFudId  UNLOG	
 		LOG "report\teventsSlice size: " << this->eventsSlice.size()  UNLOG	
 		LOG "report\tslicesSetEvent size: " << this->slicesSetEvent.size()  UNLOG	
+		LOG "report\tsetSliceLeaf size: " << this->setSliceLeaf.size()  UNLOG	
 
 		auto t1 = clk::now();
 		LOG "report\ttime: " << ((sec)(t1 - t0)).count() << "s" UNLOG	
@@ -105,30 +106,34 @@ bool Alignment::Active::slicesSync(std::size_t tint)
 			if (this->eventsSlice.size() != this->history->size)
 				this->eventsSlice.resize(this->history->size);
 		}
-		std::unique_ptr<SizeList> listSliceLeaf;
 		SizeList listEvent;
 		SizeSet setSlice;	
 		if (ok)
 		{
-			listSliceLeaf = treesLeafElements(*this->application->slices);
-			SizeSet setSliceLeaf(listSliceLeaf->begin(),listSliceLeaf->end());
+			auto mark = clk::now();
+			auto listSliceLeaf = treesLeafElements(*this->application->slices);
+			this->setSliceLeaf.clear();
+			this->setSliceLeaf.insert(listSliceLeaf->begin(),listSliceLeaf->end());
 			auto activeSize = this->size();
 			for (std::size_t i = 0; i < activeSize; i++)
 			{
 				auto sl = this->eventsSlice[i];
-				if (!sl || setSliceLeaf.find(sl) == setSliceLeaf.end())
+				if (!sl || this->setSliceLeaf.find(sl) == this->setSliceLeaf.end())
 				{
 					listEvent.push_back(i);
 					setSlice.insert(sl);		
 				}
 			}
+			LOG "slicesSync\tslice leaf size: " << this->setSliceLeaf.size() 
+				<< "\ttime: " << ((sec)(clk::now() - mark)).count() << "s" UNLOG	
 		}
 		std::unique_ptr<HistoryRepa> historySelection;
 		if (ok)
 		{
+			auto mark = clk::now();
 			historySelection = hrsel(listEvent.size(), listEvent.data(), *this->history);
 			LOG "slicesSync\tselection size: " << historySelection->size 
-				<< "\ttime: " << ((sec)(clk::now() - t0)).count() << "s" UNLOG	
+				<< "\ttime: " << ((sec)(clk::now() - mark)).count() << "s" UNLOG	
 		}
 		if (ok)
 		{
@@ -143,28 +148,31 @@ bool Alignment::Active::slicesSync(std::size_t tint)
 			auto mark = clk::now();
 			auto& hr = historySelection;
 			auto z = hr->size;
-			auto m = listSliceLeaf->size();
+			auto m = this->setSliceLeaf.size();
 			auto& mvv = hr->mapVarInt();
 			auto rr = hr->arr;
 			SizeList pvv;
 			pvv.reserve(m);
-			for (auto v : *listSliceLeaf)
+			for (auto v : this->setSliceLeaf)
 				pvv.push_back(mvv[v]);
 			std::size_t eventCount = 0;
 			for (std::size_t j = 0; j < z; j++)
-				for (std::size_t i = 0; i < m; i++)
+			{
+				std::size_t i = 0;
+				for (auto sl : this->setSliceLeaf)
 				{
 					std::size_t u = rr[pvv[i]*z + j];
 					if (u)
 					{
 						auto ev = listEvent[j];
-						auto sl = (*listSliceLeaf)[i];
 						this->eventsSlice[ev] = sl;
 						this->slicesSetEvent[sl].insert(ev);
 						eventCount++;
 						break;
 					}
+					i++;
 				}
+			}
 			if (eventCount < z)
 			{
 				LOG "slicesSync\twarning: only " << eventCount << " events updated" UNLOG				
@@ -186,6 +194,97 @@ bool Alignment::Active::slicesSync(std::size_t tint)
 	catch (const std::exception& e) 
 	{
 		LOG "slicesSync error: " << e.what()  UNLOG
+		ok = false;
+	}
+	
+	return ok;
+}
+
+bool Alignment::Active::slicesUpdate(std::size_t tint)
+{
+	auto hrsel = eventsHistoryRepasHistoryRepaSelection_u;
+	auto frmul = historyRepasFudRepasMultiply_up;
+
+	bool ok = true;
+	if (this->terminate)
+		return true;
+	
+	try {
+		std::lock_guard<std::recursive_mutex> guard(this->mutex);
+		if (ok && (!this->history || !this->application))
+		{
+			LOG "slicesUpdate\terror: active is not set" UNLOG
+			ok = false;
+		}
+		auto t0 = clk::now();
+		if (ok && this->historyEvent >= this->history->size)
+		{
+			LOG "slicesUpdate\terror: invalid historyEvent " << this->historyEvent UNLOG
+			ok = false;
+		}
+		std::unique_ptr<HistoryRepa> historySelection;
+		if (ok)
+		{
+			SizeList listEvent;
+			listEvent.push_back(this->historyEvent);
+			historySelection = hrsel(listEvent.size(), listEvent.data(), *this->history);
+			LOG "slicesUpdate\tselection size: " << historySelection->size 
+				<< "\ttime: " << ((sec)(clk::now() - t0)).count() << "s" UNLOG	
+		}
+		if (ok)
+		{
+			auto mark = clk::now();
+			if (this->applicationUnder)
+				historySelection = frmul(tint, *historySelection, *this->applicationUnder->fud);
+			historySelection = frmul(tint, *historySelection, *this->application->fud);
+			LOG "slicesUpdate\tapplication time: " << ((sec)(clk::now() - mark)).count() << "s" UNLOG	
+		}
+		if (ok)
+		{			
+			auto mark = clk::now();
+			auto ev = this->historyEvent;
+			this->slicesSetEvent[this->eventsSlice[ev]].erase(ev);
+			this->eventsSlice[ev] = 0;
+			auto& hr = historySelection;
+			auto m = this->setSliceLeaf.size();
+			auto& mvv = hr->mapVarInt();
+			auto rr = hr->arr;
+			SizeList pvv;
+			pvv.reserve(m);
+			for (auto v : this->setSliceLeaf)
+				pvv.push_back(mvv[v]);
+			std::size_t eventCount = 0;
+			std::size_t i = 0;
+			for (auto sl : this->setSliceLeaf)
+			{
+				std::size_t u = rr[pvv[i]];
+				if (u)
+				{
+					this->eventsSlice[ev] = sl;
+					this->slicesSetEvent[sl].insert(ev);
+					eventCount++;
+					break;
+				}
+				i++;
+			}
+			if (!eventCount)
+			{
+				LOG "slicesUpdate\twarning: no events updated" UNLOG				
+			}
+			else
+			{
+				LOG "slicesUpdate\tevent: " << ev << " slice: " << this->eventsSlice[ev] UNLOG				
+			}
+			LOG "slicesUpdate\tupdate time: " << ((sec)(clk::now() - mark)).count() << "s" UNLOG	
+		}
+		if (ok)
+		{	
+			LOG "slicesUpdate\ttime: " << ((sec)(clk::now() - t0)).count() << "s" UNLOG	
+		}
+	} 
+	catch (const std::exception& e) 
+	{
+		LOG "slicesUpdate error: " << e.what()  UNLOG
 		ok = false;
 	}
 	

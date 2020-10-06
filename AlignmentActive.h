@@ -34,9 +34,11 @@ namespace Alignment
 		
 		SizeList eventsSlice;
 		SizeSizeSetMap slicesSetEvent;
+		SizeSet setSliceLeaf;
 		
 		bool report();
 		bool slicesSync(std::size_t tint = 1);
+		bool slicesUpdate(std::size_t tint = 1);
 	};
 
 	
