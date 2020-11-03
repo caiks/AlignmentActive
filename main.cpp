@@ -30,43 +30,43 @@ using namespace std;
 	
 int main(int argc, char **argv)
 {
-	if (false)
-	{		
-		ECHO(Active active);
-		TRUTH(active.report());
-	}
+	// if (false)
+	// {		
+		// ECHO(Active active);
+		// TRUTH(active.report());
+	// }
 	
-	if (true)
-	{
-		auto log = [](const std::string& str)
-		{
-			std::cout << ">>> " << str << std::endl;
-			return;
-		};
+	// if (true)
+	// {
+		// auto log = [](const std::string& str)
+		// {
+			// std::cout << ">>> " << str << std::endl;
+			// return;
+		// };
 		
-		ECHO(Active active);
-		active.log = log;
-		TRUTH(active.report());
-	}
+		// ECHO(Active active);
+		// active.log = log;
+		// TRUTH(active.report());
+	// }
 	
-	if (false)
-	{
-		auto reporter = [](Active& act, std::size_t sleep)
-		{
-			while (!act.terminate)
-			{
-				TRUTH(act.report());			
-				std::this_thread::sleep_for(std::chrono::milliseconds(sleep));
-			}
-			return;
-		};
+	// if (false)
+	// {
+		// auto reporter = [](Active& act, std::size_t sleep)
+		// {
+			// while (!act.terminate)
+			// {
+				// TRUTH(act.report());			
+				// std::this_thread::sleep_for(std::chrono::milliseconds(sleep));
+			// }
+			// return;
+		// };
 		
-		ECHO(Active active);
-		std::thread t1(reporter, std::ref(active), 2000);
-		std::this_thread::sleep_for(std::chrono::milliseconds(9000));
-		active.terminate = true;
-		ECHO(t1.join());
-	}
+		// ECHO(Active active);
+		// std::thread t1(reporter, std::ref(active), 2000);
+		// std::this_thread::sleep_for(std::chrono::milliseconds(9000));
+		// active.terminate = true;
+		// ECHO(t1.join());
+	// }
 	
 	return 0;
 }
