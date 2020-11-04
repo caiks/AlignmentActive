@@ -10,6 +10,14 @@
 
 namespace Alignment
 {
+	struct ActiveSystem
+	{
+		ActiveSystem();
+		std::shared_ptr<SystemRepa> system;
+		int blockBits;
+		std::size_t blockCurrent;
+	};
+	
 	struct ActiveEventsRepa
 	{
 		ActiveEventsRepa();
@@ -30,7 +38,6 @@ namespace Alignment
 	
 	typedef std::shared_ptr<ActiveEventsArray> ActiveEventsArrayPtr;
 
-
 	struct Active
 	{
 		Active();
@@ -40,35 +47,42 @@ namespace Alignment
 		
 		std::recursive_mutex mutex;
 		
+		// std::shared_ptr<SystemRepa> systemUnder;
+		// std::shared_ptr<SystemRepa> system;	
+		std::shared_ptr<ActiveSystem> system;
+
+		int blockBits;
+		std::size_t blockCurrent;
+		
+		// std::shared_ptr<HistoryRepa> history;
+		std::vector<ActiveEventsRepaPtr> underlyingEventsRepa;
+		std::vector<HistoryRepaPtr> underlyingHistoryRepa;
+		std::vector<ActiveEventsArrayPtr> underlyingEventsSparse;
+		std::vector<HistorySparseArrayPtr> underlyingHistorySparse;
+		SizeSet eventsUpated;
+		bool historyOverflow;
+		std::size_t historyEvent;
+		std::size_t historySize;
+		std::map<std::size_t,HistorySparseArrayPtr> slicesPath;
+		// std::size_t size() const;
+		
 		// std::shared_ptr<ApplicationRepa> applicationUnder;
 		// std::shared_ptr<ApplicationRepa> application;
 		// std::size_t applicationFudIdPersistent;
 		// std::size_t applicationFudId;
-		
-
-		// std::shared_ptr<SystemRepa> systemUnder;
-		// std::shared_ptr<SystemRepa> system;
-		
-		std::size_t blockBits;
-		SizeSet blocks;
-		
-		// std::shared_ptr<HistoryRepa> history;
-		std::vector<std::pair<ActiveEventsRepaPtr,HistoryRepaPtr>> listEventsHistoryRepa;
-		std::vector<std::pair<ActiveEventsArrayPtr,HistorySparseArrayPtr>> listEventsHistorySparse;
-		bool historyOverflow;
-		std::size_t historyEvent;
-		std::size_t historySize;
-		// std::size_t size() const;
+		std::shared_ptr<DecompFudSlicedRepa> decomp;
 		
 		SizeList eventsSlice;
 		SizeSizeSetMap slicesSetEvent;
 		// SizeSet setSliceLeaf;
 		
+		ActiveEventsArrayPtr eventsSparse;
+		
 		// bool report();
 		// bool slicesSync(std::size_t tint = 1);
 		// bool slicesUpdate(std::size_t tint = 1);
+		bool update();
 		
-		ActiveEventsArrayPtr events;
 	};
 
 	

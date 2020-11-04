@@ -24,6 +24,10 @@ void log_default(const std::string& str)
 	return;
 };
 
+ActiveSystem::ActiveSystem() : blockBits(16), blockCurrent(1)
+{
+}
+
 ActiveEventsRepa::ActiveEventsRepa() : references(0)
 {
 }
@@ -33,7 +37,7 @@ ActiveEventsArray::ActiveEventsArray() : references(0)
 }
 
 // Active::Active() : terminate(false), log(log_default), historyOverflow(false), historyEvent(0), applicationFudId(0), applicationFudIdPersistent(0)
-Active::Active() : terminate(false), log(log_default), historyOverflow(false), historyEvent(0), historySize(0)
+Active::Active() : terminate(false), log(log_default), historyOverflow(false), historyEvent(0), historySize(0), blockBits(16), blockCurrent(1)
 {
 }
 
@@ -299,3 +303,156 @@ Active::Active() : terminate(false), log(log_default), historyOverflow(false), h
 	
 	// return ok;
 // }
+
+
+bool Alignment::Active::update()
+{
+
+	bool ok = true;
+	if (this->terminate)
+		return true;
+	
+	try 
+	{
+		while (ok)
+		{
+			std::lock_guard<std::recursive_mutex> guard(this->mutex);
+			if (ok)
+			{
+				for (auto& ev : this->underlyingEventsRepa)
+					ok = ok && ev;
+				for (auto& ev : this->underlyingEventsSparse)
+					ok = ok && ev;
+				for (auto& hr : this->underlyingHistoryRepa)
+					ok = ok && hr && hr->size == historySize && hr->dimension;
+				for (auto& hr : this->underlyingHistorySparse)
+					ok = ok && hr && hr->size == historySize && hr->capacity;
+				ok = ok && underlyingEventsRepa.size() == underlyingHistoryRepa.size();
+				ok = ok && underlyingEventsSparse.size() == underlyingHistorySparse.size();
+				if (!ok)
+				{
+					LOG "Active::update\terror: inconsistent underlying " UNLOG
+				}	
+			}
+
+			SizeSet eventsA;
+			if (ok)
+			{
+				bool eventsFirst = true;
+				for (auto& ev : this->underlyingEventsRepa)
+				{
+					if (!eventsFirst && !eventsA.size())
+						break;				
+					std::lock_guard<std::mutex> guard(ev->mutex);
+					SizeSet eventsB;
+					for (auto& qq : ev->mapIdEvent)	
+					{
+						if (this->eventsUpated.find(qq.first) == this->eventsUpated.end() && (eventsFirst || eventsA.find(qq.first) != eventsA.end()))
+							eventsB.insert(qq.first);						
+					}	
+					eventsFirst = false;		
+					eventsA = eventsB;
+				}
+				for (auto& ev : this->underlyingEventsSparse)
+				{
+					if (!eventsFirst && !eventsA.size())
+						break;				
+					std::lock_guard<std::mutex> guard(ev->mutex);
+					SizeSet eventsB;
+					for (auto& qq : ev->mapIdEvent)	
+					{
+						if (this->eventsUpated.find(qq.first) == this->eventsUpated.end() && (eventsFirst || eventsA.find(qq.first) != eventsA.end()))
+							eventsB.insert(qq.first);						
+					}	
+					eventsFirst = false;		
+					eventsA = eventsB;
+				}
+			}
+			
+			// if there is an event then process it otherwise return
+			if (ok && eventsA.size()) 
+			{		
+				auto eventA = *eventsA.begin(); 
+				// if (ok && (!this->history || !this->application))
+				// {
+					// LOG "slicesUpdate\terror: active is not set" UNLOG
+					// ok = false;
+				// }
+				// auto t0 = clk::now();
+				// if (ok && this->historyEvent >= this->history->size)
+				// {
+					// LOG "slicesUpdate\terror: invalid historyEvent " << this->historyEvent UNLOG
+					// ok = false;
+				// }
+				// std::unique_ptr<HistoryRepa> historySelection;
+				// if (ok)
+				// {
+					// SizeList listEvent;
+					// listEvent.push_back(this->historyEvent);
+					// historySelection = hrsel(listEvent.size(), listEvent.data(), *this->history);
+					// LOG "slicesUpdate\tselection size: " << historySelection->size 
+						// << "\ttime: " << ((sec)(clk::now() - t0)).count() << "s" UNLOG	
+				// }
+				// if (ok)
+				// {
+					// auto mark = clk::now();
+					// if (this->applicationUnder)
+						// historySelection = frmul(tint, *historySelection, *this->applicationUnder->fud);
+					// historySelection = frmul(tint, *historySelection, *this->application->fud);
+					// LOG "slicesUpdate\tapplication time: " << ((sec)(clk::now() - mark)).count() << "s" UNLOG	
+				// }
+				// if (ok)
+				// {			
+					// auto mark = clk::now();
+					// auto ev = this->historyEvent;
+					// this->slicesSetEvent[this->eventsSlice[ev]].erase(ev);
+					// this->eventsSlice[ev] = 0;
+					// auto& hr = historySelection;
+					// auto m = this->setSliceLeaf.size();
+					// auto& mvv = hr->mapVarInt();
+					// auto rr = hr->arr;
+					// SizeList pvv;
+					// pvv.reserve(m);
+					// for (auto v : this->setSliceLeaf)
+						// pvv.push_back(mvv[v]);
+					// std::size_t eventCount = 0;
+					// std::size_t i = 0;
+					// for (auto sl : this->setSliceLeaf)
+					// {
+						// std::size_t u = rr[pvv[i]];
+						// if (u)
+						// {
+							// this->eventsSlice[ev] = sl;
+							// this->slicesSetEvent[sl].insert(ev);
+							// eventCount++;
+							// break;
+						// }
+						// i++;
+					// }
+					// if (!eventCount)
+					// {
+						// LOG "slicesUpdate\twarning: no events updated" UNLOG				
+					// }
+					// else
+					// {
+						// LOG "slicesUpdate\tevent: " << ev << " slice: " << this->eventsSlice[ev] UNLOG				
+					// }
+					// LOG "slicesUpdate\tupdate time: " << ((sec)(clk::now() - mark)).count() << "s" UNLOG	
+				// }
+				// if (ok)
+				// {	
+					// LOG "slicesUpdate\ttime: " << ((sec)(clk::now() - t0)).count() << "s" UNLOG	
+				// }
+			}
+			else
+				break;
+		}
+	} 
+	catch (const std::exception& e) 
+	{
+		LOG "Active::update error: " << e.what()  UNLOG
+		ok = false;
+	}
+	
+	return ok;
+}
