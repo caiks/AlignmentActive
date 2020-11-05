@@ -45,7 +45,7 @@ namespace Alignment
 		bool terminate;
 		void (*log)(const std::string&);
 		
-		std::recursive_mutex mutex;
+		std::mutex mutex;
 		
 		// std::shared_ptr<SystemRepa> systemUnder;
 		// std::shared_ptr<SystemRepa> system;	
@@ -56,10 +56,10 @@ namespace Alignment
 		
 		// std::shared_ptr<HistoryRepa> history;
 		std::vector<ActiveEventsRepaPtr> underlyingEventsRepa;
-		std::vector<HistoryRepaPtr> underlyingHistoryRepa;
+		HistoryRepaPtrList underlyingHistoryRepa;
 		std::vector<ActiveEventsArrayPtr> underlyingEventsSparse;
-		std::vector<HistorySparseArrayPtr> underlyingHistorySparse;
-		SizeSet eventsUpated;
+		HistorySparseArrayPtrList underlyingHistorySparse;
+		SizeSet eventsUpdated;
 		bool historyOverflow;
 		std::size_t historyEvent;
 		std::size_t historySize;
@@ -81,7 +81,7 @@ namespace Alignment
 		// bool report();
 		// bool slicesSync(std::size_t tint = 1);
 		// bool slicesUpdate(std::size_t tint = 1);
-		bool update();
+		bool update(std::size_t mapCapacity = 5);
 		
 	};
 
