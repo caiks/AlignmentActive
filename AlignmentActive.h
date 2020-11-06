@@ -18,22 +18,26 @@ namespace Alignment
 		std::size_t blockCurrent;
 	};
 	
+	typedef std::pair<HistoryRepaPtr,std::size_t> HistoryRepaPtrSizePair;
+		
 	struct ActiveEventsRepa
 	{
-		ActiveEventsRepa();
+		ActiveEventsRepa(std::size_t referencesA = 0);
 		std::mutex mutex;
 		std::size_t references;
-		std::map<std::size_t,std::pair<HistoryRepaPtr,std::size_t>> mapIdEvent;
+		std::map<std::size_t,HistoryRepaPtrSizePair> mapIdEvent;
 	};
 	
 	typedef std::shared_ptr<ActiveEventsRepa> ActiveEventsRepaPtr;
 		
+	typedef std::pair<HistorySparseArrayPtr,std::size_t> HistorySparseArrayPtrSizePair;
+
 	struct ActiveEventsArray
 	{
-		ActiveEventsArray();
+		ActiveEventsArray(std::size_t referencesA = 0);
 		std::mutex mutex;
 		std::size_t references;
-		std::map<std::size_t,std::pair<HistorySparseArrayPtr,std::size_t>> mapIdEvent;
+		std::map<std::size_t,HistorySparseArrayPtrSizePair> mapIdEvent;
 	};
 	
 	typedef std::shared_ptr<ActiveEventsArray> ActiveEventsArrayPtr;
@@ -47,14 +51,11 @@ namespace Alignment
 		
 		std::mutex mutex;
 		
-		// std::shared_ptr<SystemRepa> systemUnder;
-		// std::shared_ptr<SystemRepa> system;	
 		std::shared_ptr<ActiveSystem> system;
 
 		int blockBits;
 		std::size_t blockCurrent;
 		
-		// std::shared_ptr<HistoryRepa> history;
 		std::vector<ActiveEventsRepaPtr> underlyingEventsRepa;
 		HistoryRepaPtrList underlyingHistoryRepa;
 		std::vector<ActiveEventsArrayPtr> underlyingEventsSparse;
@@ -64,28 +65,25 @@ namespace Alignment
 		std::size_t historyEvent;
 		std::size_t historySize;
 		std::map<std::size_t,HistorySparseArrayPtr> slicesPath;
-		// std::size_t size() const;
-		
-		// std::shared_ptr<ApplicationRepa> applicationUnder;
-		// std::shared_ptr<ApplicationRepa> application;
-		// std::size_t applicationFudIdPersistent;
-		// std::size_t applicationFudId;
+
 		std::shared_ptr<DecompFudSlicedRepa> decomp;
 		
 		SizeList eventsSlice;
 		SizeSizeSetMap slicesSetEvent;
-		// SizeSet setSliceLeaf;
 		
 		ActiveEventsArrayPtr eventsSparse;
 		
-		// bool report();
-		// bool slicesSync(std::size_t tint = 1);
-		// bool slicesUpdate(std::size_t tint = 1);
+		std::size_t induceThreshold;
+		SizeSet slicesInduce;
+		
 		bool update(std::size_t mapCapacity = 5);
 		
 	};
-
-	
 }
+
+std::ostream& operator<<(std::ostream& out, const Alignment::ActiveEventsRepa&);
+
+std::ostream& operator<<(std::ostream& out, const Alignment::ActiveEventsArray&);
+
 
 #endif
