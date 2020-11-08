@@ -13,6 +13,11 @@
 #include <chrono>
 #include <ctime>
 
+#define ECHO(x) std::cout << #x << std::endl; x
+#define EVAL(x) std::cout << #x << ": " << (x) << std::endl
+#define EVALL(x) std::cout << #x << ": " << std::endl << (x) << std::endl
+#define TRUTH(x) std::cout << #x << ": " << ((x) ? "true" : "false") << std::endl
+
 using namespace Alignment;
 
 typedef std::chrono::duration<double> sec;
@@ -143,14 +148,14 @@ bool Alignment::Active::update(std::size_t mapCapacity)
 				}
 			}		
 			// if there is an event then process it otherwise return
-			if (!(ok && eventsA.size() && (!eventsUpdatedA.size() || *eventsA.end() > *eventsUpdatedA.end()))) 
+			if (!(ok && eventsA.size() && (!eventsUpdatedA.size() || *eventsA.rbegin() > *eventsUpdatedA.rbegin()))) 
 				break;
 			// get first new event id
 			auto eventA = *eventsA.begin();
 			if (ok && eventsUpdatedA.size())
 			{
 				for (auto eventB : eventsA)
-					if (eventB > *eventsUpdatedA.end())
+					if (eventB > *eventsUpdatedA.rbegin())
 					{
 						eventA = eventB;
 						break;
@@ -276,9 +281,12 @@ bool Alignment::Active::update(std::size_t mapCapacity)
 					auto rr1 = hr1->arr;
 					auto j = this->historyEvent;
 					std::size_t v = 0;
-					for (std::size_t i = 0; i < n; i++)
+					for (int i = n-1; i >= 0; i--)
 						if (rr1[i])
+						{
 							v = rr1[i];
+							break;
+						}
 					rr[j] = v;
 					if (v && this->slicesPath.find(v) == this->slicesPath.end())
 						this->slicesPath[v] = hr1;
@@ -416,7 +424,7 @@ bool Alignment::Active::update(std::size_t mapCapacity)
 					for (auto eventB : this->eventsUpdated)
 						if (eventB < eventLeast)
 							eventsB.insert(eventB);	
-					eventsB.erase(*this->eventsUpdated.end());
+					eventsB.erase(*this->eventsUpdated.rbegin());
 					for (auto eventB : eventsB)
 						this->eventsUpdated.erase(eventB);							
 				}

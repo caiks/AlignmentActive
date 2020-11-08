@@ -76,7 +76,7 @@ namespace Alignment
 		std::size_t induceThreshold;
 		SizeSet slicesInduce;
 		
-		bool update(std::size_t mapCapacity = 5);
+		bool update(std::size_t mapCapacity = 3);
 		
 	};
 }
