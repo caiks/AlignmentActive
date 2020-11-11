@@ -71,7 +71,7 @@ std::ostream& operator<<(std::ostream& out, const ActiveEventsArray& ev)
 	return out;
 }
 
-Active::Active() : terminate(false), log(log_default), historyOverflow(false), historyEvent(0), historySize(0), blockBits(16), blockCurrent(1), induceThreshold(0)
+Active::Active() : terminate(false), log(log_default), historyOverflow(false), historyEvent(0), historySize(0), bits(16), var(0), varSlice(0), induceThreshold(100), logging(false), slicesPathLenMax(1)
 {
 }
 
@@ -79,7 +79,7 @@ Active::Active() : terminate(false), log(log_default), historyOverflow(false), h
 #define LOG { std::ostringstream log_str; log_str <<
 
 // event ids should be monotonic and updated no more than once
-bool Alignment::Active::update(std::size_t mapCapacity)
+bool Alignment::Active::update(const ActiveUpdateParameters& pp)
 {
 	auto drmul = historyRepaPtrListsHistorySparseArrayPtrListsDecompFudSlicedRepasEventsPathSlice_u;
 
@@ -289,7 +289,11 @@ bool Alignment::Active::update(std::size_t mapCapacity)
 						}
 					rr[j] = v;
 					if (v && this->slicesPath.find(v) == this->slicesPath.end())
+					{
 						this->slicesPath[v] = hr1;
+						if (n > this->slicesPathLenMax)
+							this->slicesPathLenMax = n;
+					}
 				}
 			}
 			if (ok)
@@ -303,16 +307,17 @@ bool Alignment::Active::update(std::size_t mapCapacity)
 			// apply the model
 			if (ok)
 			{
-				auto ll = drmul(this->underlyingHistoryRepa,this->underlyingHistorySparse,*this->decomp,this->historyEvent,mapCapacity);	
+				auto mark = (ok && this->logging) ? clk::now() : std::chrono::time_point<clk>();
+				auto ll = drmul(this->underlyingHistoryRepa,this->underlyingHistorySparse,*this->decomp,this->historyEvent,pp.mapCapacity);	
 				ok = ok && ll;
 				if (!ok)
 				{
 					LOG "Active::update\terror: drmul failed to return a list" UNLOG
 				}
 				// sync active slices
+				std::size_t sliceA = 0;
 				if (ok)
 				{
-					std::size_t sliceA = 0;
 					if (ll->size())
 						sliceA = ll->back();
 					if (this->eventsSlice.size() != this->historySize)
@@ -351,6 +356,10 @@ bool Alignment::Active::update(std::size_t mapCapacity)
 						}
 						ev->mapIdEvent.insert_or_assign(eventA,std::pair<HistorySparseArrayPtr,std::size_t>(hr,ev->references));
 					}			
+				}
+				if (ok && this->logging)
+				{
+					LOG "Active::update apply\tevent id: " << eventA << "\thistory id: " << this->historyEvent << "\tslice: " << sliceA << "\tslice size: " << this->slicesSetEvent[sliceA].size() << "\ttime " << ((sec)(clk::now() - mark)).count() << "s" UNLOG
 				}
 			}
 			// increment historyEvent
@@ -434,6 +443,331 @@ bool Alignment::Active::update(std::size_t mapCapacity)
 	catch (const std::exception& e) 
 	{
 		LOG "Active::update error: " << e.what()  UNLOG
+		ok = false;
+	}
+	
+	return ok;
+}
+
+bool Alignment::Active::induce(const ActiveInduceParameters& pp)
+{
+	bool ok = true;
+	if (this->terminate)
+		return true;
+	try 
+	{
+		while (ok)
+		{
+			std::lock_guard<std::mutex> guard(this->mutex);		
+			auto& llr = this->underlyingHistoryRepa;
+			auto& lla = this->underlyingHistorySparse;
+			// check consistent underlying
+			if (ok)
+			{
+				ok = ok && (llr.size() || lla.size());
+				for (auto& hr : llr)
+					ok = ok && hr && hr->size == historySize && hr->dimension > 0 && hr->evient;
+				for (auto& hr : lla)
+					ok = ok && hr && hr->size == historySize && hr->capacity == 1;
+				if (!ok)
+				{
+					LOG "Active::induce\terror: inconsistent underlying" UNLOG
+					break;
+				}	
+			}			
+			// get first new event id
+			std::size_t sliceA = 0;
+			std::size_t sliceSizeA = 0;
+			if (ok)
+			{
+				for (auto sliceB : this->slicesInduce)
+				{
+					auto sliceSizeB = this->slicesSetEvent[sliceB].size();
+					if (sliceSizeB > sliceSizeA)
+					{
+						sliceA = sliceB;
+						sliceSizeA = sliceSizeB;
+					}
+				}				
+			}
+			// if there is a slice then process it otherwise return
+			if (!(ok && sliceSizeA)) 
+				break;
+			// copy events from evient active history to varient selection
+			if (ok)
+			{
+				auto& setEventsA = this->slicesSetEvent[sliceA];
+				SizeList eventsA(setEventsA.begin(),setEventsA.end());			
+				auto hrr = std::make_unique<HistoryRepa>();
+				SizeSet qqr;
+				if (ok)
+				{
+					auto& qqx = this->induceVarExlusions;					
+					for (auto& hr : llr)
+					{
+						auto n = hr->dimension;
+						auto vv = hr->vectorVar;
+						for (std::size_t i = 0; i < n; i++)
+						{
+							auto v = vv[i];
+							if (qqx.find(v) == qqx.end())
+								qqr.insert(v);
+						}
+					}
+				}
+				if (ok && qqr.size())
+				{
+					hrr->dimension = qqr.size();
+					auto nr = hrr->dimension;
+					hrr->vectorVar = new std::size_t[nr];
+					auto vvr = hrr->vectorVar;
+					hrr->shape = new std::size_t[nr];
+					auto shr = hrr->shape;
+					hrr->size = eventsA.size();
+					auto zr = hrr->size;
+					{
+						std::size_t i = 0;
+						for (auto v : qqr)
+						{
+							vvr[i] = v;
+							for (auto& hr : llr)
+							{
+								auto& mvv = hr->mapVarInt();
+								auto it = mvv.find(v);
+								if (it != mvv.end())
+								{
+									shr[i] = hr->shape[it->second];
+									break;
+								}
+							}
+							i++;
+						}
+					}
+					hrr->evient = false;
+					hrr->arr = new unsigned char[zr*nr];
+					auto rrr = hrr->arr;		
+					auto ev = eventsA.data();
+					for (auto& hr : llr)
+					{
+						auto n = hr->dimension;
+						auto rr = hr->arr;
+						auto& mvv = hr->mapVarInt();
+						for (std::size_t i = 0; i < nr; i++)
+						{
+							auto it = mvv.find(vvr[i]);
+							if (it != mvv.end())
+							{
+								auto k = it->second;
+								auto izr = i*zr;
+								for (std::size_t j = 0; j < zr; j++)
+									rrr[izr + j] = rr[ev[j]*n + k];
+								break;
+							}						
+						}
+					}
+				}
+				SizeSizeUMap qqa;
+				if (ok && lla.size())
+				{
+					auto za = eventsA.size(); 
+					auto ev = eventsA.data();
+					auto& ll = this->slicesPath;
+					auto lp = this->slicesPathLenMax > 0 ? this->slicesPathLenMax : 1;
+					qqa.reserve(lp * za * lla.size() * 3);
+					for (auto& hr : lla)
+					{
+						auto rr = hr->arr;
+						for (std::size_t j = 0; j < za; j++)
+						{
+							auto v = rr[ev[j]];
+							auto it = ll.find(v);
+							if (it != ll.end())
+							{
+								auto& hr1 = it->second;
+								auto n1 = hr1->capacity;
+								auto rr1 = hr1->arr;
+								for (std::size_t i = 0; i < n1; i++)									if (rr1[i])
+										qqa[rr1[i]]++;
+							}
+							else
+							{
+								qqa[v]++;
+							}
+						}
+					}
+					auto& qqx = this->induceVarExlusions;	
+					for (auto v : qqx)
+						qqa.erase(v);
+					for (auto v : qqr)
+						qqa.erase(v);
+				}
+				if (ok && (qqr.size() || qqa.size()))
+				{
+					auto za = eventsA.size(); 
+					auto nmax = (std::size_t)std::sqrt(pp.znnmax / (double)(2*za));
+					nmax = std::max(nmax, pp.bmax);
+					if (nmax < qqr.size() + qqa.size())
+					{
+						if (qqr.size())
+						{
+							// auto ee = prents(*hrpr(vv.size(), vv.data(), *hr));
+							
+						}
+						if (qqa.size())
+						{
+							
+						}
+						// std::sort(ee->begin(), ee->end());
+					}				
+				}					
+			}
+			// if (ok)
+			// {
+				// ok = ok && this->decomp;
+				// if (!ok)
+				// {
+					// LOG "Active::update\terror: no decomp set" UNLOG
+				// }				
+			// }
+			// // apply the model
+			// if (ok)
+			// {
+				// auto mark = (ok && this->logging) ? clk::now() : std::chrono::time_point<clk>();
+				// auto ll = drmul(this->underlyingHistoryRepa,this->underlyingHistorySparse,*this->decomp,this->historyEvent,pp.mapCapacity);	
+				// ok = ok && ll;
+				// if (!ok)
+				// {
+					// LOG "Active::update\terror: drmul failed to return a list" UNLOG
+				// }
+				// // sync active slices
+				// std::size_t sliceA = 0;
+				// if (ok)
+				// {
+					// if (ll->size())
+						// sliceA = ll->back();
+					// if (this->eventsSlice.size() != this->historySize)
+						// this->eventsSlice.resize(this->historySize);
+					// std::size_t sliceB = this->eventsSlice[this->historyEvent];
+					// if (!sliceA || sliceA != sliceB)
+					// {
+						// this->eventsSlice[this->historyEvent] = sliceA;
+						// auto& setA = this->slicesSetEvent[sliceA];
+						// setA.insert(this->historyEvent);
+						// if (this->induceThreshold && setA.size() == this->induceThreshold)
+							// this->slicesInduce.insert(sliceA);
+						// if (sliceA)
+						// {
+							// auto& setB = this->slicesSetEvent[sliceB];
+							// setB.erase(this->historyEvent);
+							// if (this->induceThreshold && setB.size() == this->induceThreshold-1)
+								// this->slicesInduce.erase(sliceB);
+						// }
+					// }					
+				// }
+				// // create overlying event
+				// if (ok && this->eventsSparse)
+				// {
+					// auto& ev = this->eventsSparse;
+					// std::lock_guard<std::mutex> guard(ev->mutex);
+					// if (ev->references)
+					// {
+						// std::size_t n = ll->size() ? ll->size() : 1;
+						// auto hr = std::make_shared<HistorySparseArray>(1,n);
+						// if (ll->size())
+						// {
+							// auto rr = hr->arr;	
+							// for (std::size_t i = 0; i < n; i++)						
+								// rr[i] = (*ll)[i];
+						// }
+						// ev->mapIdEvent.insert_or_assign(eventA,std::pair<HistorySparseArrayPtr,std::size_t>(hr,ev->references));
+					// }			
+				// }
+				// if (ok && this->logging)
+				// {
+					// LOG "Active::update apply\tevent id: " << eventA << "\thistory id: " << this->historyEvent << "\tslice: " << sliceA << "\tslice size: " << this->slicesSetEvent[sliceA].size() << "\ttime " << ((sec)(clk::now() - mark)).count() << "s" UNLOG
+				// }
+			// }
+			// // increment historyEvent
+			// if (ok)
+			// {
+				// this->historyEvent++;
+				// if (this->historyEvent >= this->historySize)
+				// {
+					// this->historyEvent = 0;
+					// this->historyOverflow = true;
+				// }
+				// for (auto eventB : eventsA)
+					// if (eventB <= eventA)
+						// this->eventsUpdated.insert(eventB);
+			// }
+			// // unreference underlying up to update event
+			// std::size_t eventLeast = eventA;
+			// if (ok)
+			// {
+				// for (auto& ev : this->underlyingEventsRepa)
+				// {			
+					// std::lock_guard<std::mutex> guard(ev->mutex);
+					// if (ev->mapIdEvent.size() && ev->mapIdEvent.begin()->first < eventLeast)
+						// eventLeast = ev->mapIdEvent.begin()->first;
+					// SizeSet eventsB;
+					// for (auto& qq : ev->mapIdEvent)	
+					// {
+						// if (qq.first <= eventA 
+							// && eventsA.find(qq.first) != eventsA.end()
+							// && eventsUpdatedA.find(qq.first) == eventsUpdatedA.end())
+						// {
+							// auto& refs = qq.second.second;
+							// if (refs)
+								// refs--;									
+							// if (!refs)
+								// eventsB.insert(qq.first);									
+						// }
+					// }	
+					// for (auto eventB : eventsB)	
+						// ev->mapIdEvent.erase(eventB);
+				// }
+				// for (auto& ev : this->underlyingEventsSparse)
+				// {			
+					// std::lock_guard<std::mutex> guard(ev->mutex);
+					// if (ev->mapIdEvent.size() && ev->mapIdEvent.begin()->first < eventLeast)
+						// eventLeast = ev->mapIdEvent.begin()->first;
+					// SizeSet eventsB;
+					// for (auto& qq : ev->mapIdEvent)	
+					// {
+						// if (qq.first <= eventA 
+							// && eventsA.find(qq.first) != eventsA.end()
+							// && eventsUpdatedA.find(qq.first) == eventsUpdatedA.end())
+						// {
+							// auto& refs = qq.second.second;
+							// if (refs)
+								// refs--;									
+							// if (!refs)
+								// eventsB.insert(qq.first);									
+						// }
+					// }	
+					// for (auto eventB : eventsB)	
+						// ev->mapIdEvent.erase(eventB);
+				// }
+			// }
+			// // remove all but last eventsUpdated before the first event of any underlying
+			// if (ok)
+			// {
+				// if (this->eventsUpdated.size())
+				// {
+					// SizeSet eventsB;
+					// for (auto eventB : this->eventsUpdated)
+						// if (eventB < eventLeast)
+							// eventsB.insert(eventB);	
+					// eventsB.erase(*this->eventsUpdated.rbegin());
+					// for (auto eventB : eventsB)
+						// this->eventsUpdated.erase(eventB);							
+				// }
+			// }			
+		}
+	} 
+	catch (const std::exception& e) 
+	{
+		LOG "Active::induce error: " << e.what()  UNLOG
 		ok = false;
 	}
 	

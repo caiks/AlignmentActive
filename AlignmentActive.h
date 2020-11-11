@@ -42,19 +42,42 @@ namespace Alignment
 	
 	typedef std::shared_ptr<ActiveEventsArray> ActiveEventsArrayPtr;
 
+	struct ActiveUpdateParameters
+	{
+		std::size_t mapCapacity = 3;
+	};
+	
+	struct ActiveInduceParameters
+	{
+		size_t tint = 1;		
+		size_t wmax = 18;
+		size_t lmax = 8;
+		size_t xmax = 128;
+		double znnmax = 60000.0 * 2.0 * 100.0 * 100.0;
+		size_t omax = 10;
+		size_t bmax = 10 * 3;
+		size_t mmax = 3;
+		size_t umax = 128;
+		size_t pmax = 1;
+		size_t mult = 1;
+		size_t seed = 5;
+	};
+	
 	struct Active
 	{
 		Active();
 		
 		bool terminate;
 		void (*log)(const std::string&);
+		bool logging;
 		
 		std::mutex mutex;
 		
 		std::shared_ptr<ActiveSystem> system;
 
-		int blockBits;
-		std::size_t blockCurrent;
+		int bits;
+		std::size_t var;
+		std::size_t varSlice;
 		
 		std::vector<ActiveEventsRepaPtr> underlyingEventsRepa;
 		HistoryRepaPtrList underlyingHistoryRepa;
@@ -65,6 +88,7 @@ namespace Alignment
 		std::size_t historyEvent;
 		std::size_t historySize;
 		std::map<std::size_t,HistorySparseArrayPtr> slicesPath;
+		std::size_t slicesPathLenMax;
 
 		std::shared_ptr<DecompFudSlicedRepa> decomp;
 		
@@ -75,9 +99,10 @@ namespace Alignment
 		
 		std::size_t induceThreshold;
 		SizeSet slicesInduce;
-		SizeList induceVarExlusions;
+		SizeSet induceVarExlusions;
 		
-		bool update(std::size_t mapCapacity = 3);
+		bool update(const ActiveUpdateParameters&);
+		bool induce(const ActiveInduceParameters&);
 		
 	};
 }
