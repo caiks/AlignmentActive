@@ -452,6 +452,9 @@ bool Alignment::Active::update(const ActiveUpdateParameters& pp)
 // assume that only one inducer so that can modify the var refs without locking active
 bool Alignment::Active::induce(const ActiveInduceParameters& pp)
 {
+	auto hrpr = setVarsHistoryRepasRed_u;
+	auto prents = histogramRepaRedsListEntropy;
+	
 	bool ok = true;
 	if (this->terminate)
 		return true;
@@ -463,7 +466,10 @@ bool Alignment::Active::induce(const ActiveInduceParameters& pp)
 			std::size_t sliceSizeA = 0;			
 			auto hrr = std::make_unique<HistoryRepa>();
 			auto haa = std::make_unique<HistorySparseArray>();
+			SizeSet qqr;
 			std::unordered_map<std::size_t,HistorySparseArrayPtr> slppa;
+			std::size_t slppalen = 0;		
+			// copy repa and sparse from locked active
 			if (ok)
 			{			
 				std::lock_guard<std::mutex> guard(this->mutex);		
@@ -504,7 +510,6 @@ bool Alignment::Active::induce(const ActiveInduceParameters& pp)
 				{
 					auto& setEventsA = this->slicesSetEvent[sliceA];
 					SizeList eventsA(setEventsA.begin(),setEventsA.end());			
-					SizeSet qqr;
 					if (ok && llr.size())
 					{
 						auto& qqx = this->induceVarExlusions;					
@@ -559,7 +564,6 @@ bool Alignment::Active::induce(const ActiveInduceParameters& pp)
 							}
 						}
 					}
-					SizeSizeUMap qqa;
 					if (ok && lla.size())
 					{
 						auto za = eventsA.size(); 
@@ -571,6 +575,7 @@ bool Alignment::Active::induce(const ActiveInduceParameters& pp)
 						haa->arr = new std::size_t[za*na];
 						auto raa = haa->arr;
 						slppa.reserve(za*na);
+						slppalen = this->slicesPathLenMax;
 						for (std::size_t i = 0; i < na; i++)
 						{
 							auto& hr = lla[i];
@@ -590,32 +595,158 @@ bool Alignment::Active::induce(const ActiveInduceParameters& pp)
 					}
 				}
 			}
+			// induce while unlocked
+			if (ok)
+			{
+				auto mark = (ok && this->logging) ? clk::now() : std::chrono::time_point<clk>();
+				SizeSizeUMap qqa;
+				std::unordered_map<std::size_t, SizeSet> mma;
+				// prepare for the sparse entropy calculations
+				if (ok && haa->size && haa->capacity)
+				{
+					auto za = haa->size; 
+					auto na = haa->capacity; 
+					auto raa = haa->arr;
+					qqa.reserve((slppalen > 0 ? slppalen : 1) * za * na * 3);
+					mma.reserve((slppalen > 0 ? slppalen : 1) * za * na * 3);
+					for (std::size_t k = 0; k < na; k++)
+					{
+						for (std::size_t j = 0; j < za; j++)
+						{
+							auto v = raa[j*na + k];
+							auto it = slppa.find(v);
+							if (it != slppa.end())
+							{
+								auto& hr1 = it->second;
+								auto n1 = hr1->capacity;
+								auto rr1 = hr1->arr;
+								for (std::size_t i = 0; i < n1; i++)
+								{
+									auto w = rr1[i];
+									if (w)
+									{
+										qqa[w]++;
+										for (std::size_t m = i+1; m < n1; m++)
+										{
+											auto x = rr1[m];
+											if (x)
+												mma[w].insert(x);
+										}
+									}									
+								}
+							}
+							else
+							{
+								qqa[v]++;
+							}
+						}
+					}
+				}
+				// get top nmax vars by entropy
+				// remove any sparse parents with same entropy as children
+				if (ok && (qqr.size() || qqa.size()))
+				{
+					// EVAL(qqr.size());
+					// EVAL(qqr);
+					// EVAL(qqa.size());
+					// EVAL(qqa);
+					auto nmax = (std::size_t)std::sqrt(pp.znnmax / (double)(2*sliceSizeA));
+					// EVAL(nmax);
+					nmax = std::max(nmax, pp.bmax);
+					// EVAL(nmax);
+					DoubleSizePairList ee;
+					ee.reserve(qqr.size() + qqa.size());
+					if (qqr.size())
+					{
+						SizeList vv(qqr.begin(),qqr.end());
+						auto eer = prents(*hrpr(vv.size(), vv.data(), *hrr));
+						// EVAL(*hrr);
+						// EVAL(*hrpr(vv.size(), vv.data(), *hrr));
+						// EVAL(*eer);
+						for (auto p : *eer)
+							ee.push_back(DoubleSizePair(-p.first,p.second));
+					}
+					// EVAL(ee);
+					if (qqa.size())
+					{
+						std::map<double, SizeSet> eem;
+						double f = 1.0/(double)sliceSizeA;
+						for (auto p : qqa)		
+						{
+							double a = (double)p.second * f;
+							double e = a * std::log(a) + (1.0-a) * std::log(1.0-a);
+							auto v = p.first; 
+							auto& xx = eem[e];
+							if (xx.size())
+							{
+								auto iv = mma.find(v);
+								if (iv != mma.end())
+								{
+									bool found = false;
+									for (auto w : xx)
+									{
+										if (iv->second.find(w) != iv->second.end())
+										{
+											found = true;
+											break;
+										}
+									}
+									if (!found)								
+										xx.insert(v);
+								}
+								else
+									xx.insert(v);
+								SizeSet yy(xx);
+								for (auto w : yy)
+								{
+									auto iw = mma.find(w);
+									if (iw != mma.end() && iw->second.find(v) != iw->second.end())
+										xx.erase(w);
+								}
+							}
+							else
+								xx.insert(v);
+						}	
+						for (auto& p : eem)	
+							for (auto& q : p.second)								
+								ee.push_back(DoubleSizePair(p.first,q));
+					}
+					std::sort(ee.begin(), ee.end());
+					// EVAL(ee);
+					SizeUSet qq;
+					qq.reserve(ee.size());
+					for (std::size_t i = 0; i < nmax && i < ee.size(); i++)
+						qq.insert(ee[i].second);
+					SizeSet qqr1(qqr);
+					for (auto v : qqr1)
+						if (qq.find(v) == qq.end())
+							qqr.erase(v);
+					SizeUSet qqa1;
+					qqa1.reserve(qqa.size());
+					for (auto p : qqa)
+						qqa1.insert(p.first);
+					for (auto v : qqa1)
+						if (qq.find(v) == qq.end())
+							qqa.erase(v);
+					EVAL(qqr.size());
+					EVAL(qqr);
+					EVAL(qqa.size());
+					EVAL(qqa);
+				}	
+
+				if (ok && this->logging)
+				{
+					LOG "Active::induce model\tslice: " << sliceA << "\tslice size: " << sliceSizeA << "\ttime " << ((sec)(clk::now() - mark)).count() << "s" UNLOG
+				}				
+				
+			}
 			EVAL(sliceA);
 			EVAL(sliceSizeA);
-			EVAL(*hrr);
-			EVAL(*haa);
+			// EVAL(*hrr);
+			// EVAL(*haa);
 			EVAL(slppa.size());
 			ok = false;
 			
-				// if (ok && (qqr.size() || qqa.size()))
-				// {
-					// auto za = eventsA.size(); 
-					// auto nmax = (std::size_t)std::sqrt(pp.znnmax / (double)(2*za));
-					// nmax = std::max(nmax, pp.bmax);
-					// if (nmax < qqr.size() + qqa.size())
-					// {
-						// if (qqr.size())
-						// {
-							// // auto ee = prents(*hrpr(vv.size(), vv.data(), *hr));
-							
-						// }
-						// if (qqa.size())
-						// {
-							
-						// }
-						// // std::sort(ee->begin(), ee->end());
-					// }				
-				// }					
 
 		}
 	} 
