@@ -13,9 +13,11 @@ namespace Alignment
 	struct ActiveSystem
 	{
 		ActiveSystem();
+		std::mutex mutex;
 		std::shared_ptr<SystemRepa> system;
-		int blockBits;
-		std::size_t blockCurrent;
+		int bits;
+		std::size_t block;
+		std::size_t next(int bitsA);
 	};
 	
 	typedef std::pair<HistoryRepaPtr,std::size_t> HistoryRepaPtrSizePair;
@@ -102,6 +104,8 @@ namespace Alignment
 		SizeSet induceVarExlusions;
 		
 		bool update(const ActiveUpdateParameters&);
+		bool (*updateCallback)(const SizeSet& eventsA, std::size_t eventA, std::size_t historyEventA, std::size_t sliceA);
+
 		bool induce(const ActiveInduceParameters&);
 		
 	};
