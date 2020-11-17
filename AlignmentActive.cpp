@@ -12,6 +12,7 @@
 #include <fstream>
 #include <chrono>
 #include <ctime>
+#include <cstring>
 
 #define ECHO(x) std::cout << #x << std::endl; x
 #define EVAL(x) std::cout << #x << ": " << (x) << std::endl
@@ -477,9 +478,13 @@ bool Alignment::Active::update(const ActiveUpdateParameters& pp)
 // assume that only one inducer so that can modify the var refs without locking active
 bool Alignment::Active::induce(const ActiveInduceParameters& pp)
 {
+	auto hrhrred = setVarsHistoryRepasHistoryRepaReduced_u;
+	auto hrjoin = vectorHistoryRepasJoin_u;	
 	auto hrpr = setVarsHistoryRepasRed_u;
 	auto prents = histogramRepaRedsListEntropy;
-	
+	auto hrshuffle = historyRepasShuffle_us;
+	auto hashuffle = historySparseArrayShuffle_us;
+		
 	bool ok = true;
 	if (this->terminate)
 		return true;
@@ -489,14 +494,15 @@ bool Alignment::Active::induce(const ActiveInduceParameters& pp)
 		{
 			std::size_t sliceA = 0;
 			std::size_t sliceSizeA = 0;			
-			auto hrr = std::make_unique<HistoryRepa>();
-			auto haa = std::make_unique<HistorySparseArray>();
+			std::unique_ptr<HistoryRepa> hrr;
+			std::unique_ptr<HistorySparseArray> haa;
 			SizeSet qqr;
 			std::unordered_map<std::size_t,HistorySparseArrayPtr> slppa;
 			std::size_t slppalen = 0;		
 			// copy repa and sparse from locked active
 			if (ok)
 			{			
+				auto mark = (ok && this->logging) ? clk::now() : std::chrono::time_point<clk>();
 				std::lock_guard<std::mutex> guard(this->mutex);		
 				auto& llr = this->underlyingHistoryRepa;
 				auto& lla = this->underlyingHistorySparse;
@@ -552,6 +558,7 @@ bool Alignment::Active::induce(const ActiveInduceParameters& pp)
 					}
 					if (ok && qqr.size())
 					{
+						hrr = std::make_unique<HistoryRepa>();
 						hrr->dimension = qqr.size();
 						auto nr = hrr->dimension;
 						hrr->vectorVar = new std::size_t[nr];
@@ -595,6 +602,7 @@ bool Alignment::Active::induce(const ActiveInduceParameters& pp)
 						auto na = lla.size();
 						auto ev = eventsA.data();
 						auto& slpp = this->slicesPath;
+						haa = std::make_unique<HistorySparseArray>();
 						haa->size = za;
 						haa->capacity = na;
 						haa->arr = new std::size_t[za*na];
@@ -619,15 +627,30 @@ bool Alignment::Active::induce(const ActiveInduceParameters& pp)
 						}
 					}
 				}
+				if (ok && this->logging)
+				{
+					LOG "Active::induce copy\tslice: " << sliceA << "\tslice size: " << sliceSizeA << "\trepa dimension: " << (hrr ? hrr->dimension : 0) << "\tsparse capacity: " << (haa ? haa->capacity : 0) << "\tsparse paths: " << slppa.size() << "\ttime " << ((sec)(clk::now() - mark)).count() << "s" UNLOG
+				}	
 			}
 			// induce while unlocked
-			if (ok)
+			if (ok && (hrr || haa))
 			{
 				auto mark = (ok && this->logging) ? clk::now() : std::chrono::time_point<clk>();
+				// check consistent copy
+				if (ok)
+				{
+					ok = ok && (!hrr || (hrr->dimension > 0 && hrr->size == sliceSizeA && hrr->arr));
+					ok = ok && (!haa || (haa->capacity > 0 && haa->size == sliceSizeA && haa->arr));
+					if (!ok)
+					{
+						LOG "Active::induce\terror: inconsistent copy" UNLOG
+						break;
+					}	
+				}
 				SizeSizeUMap qqa;
 				std::unordered_map<std::size_t, SizeSet> mma;
 				// prepare for the sparse entropy calculations
-				if (ok && haa->size && haa->capacity)
+				if (ok && haa && haa->size && haa->capacity)
 				{
 					auto za = haa->size; 
 					auto na = haa->capacity; 
@@ -753,12 +776,172 @@ bool Alignment::Active::induce(const ActiveInduceParameters& pp)
 					for (auto v : qqa1)
 						if (qq.find(v) == qq.end())
 							qqa.erase(v);
-					EVAL(qqr.size());
-					EVAL(qqr);
-					EVAL(qqa.size());
-					EVAL(qqa);
+					if (ok && this->logging)
+					{
+						LOG "Active::induce model\trepa dimension: " << qqr.size() << "\tsparse dimension: " << qqa.size() UNLOG
+					}	
+					// EVAL(qqr.size());
+					// EVAL(qqr);
+					// EVAL(qqa.size());
+					// EVAL(qqa);
 				}	
 
+				std::unique_ptr<HistoryRepa> hr;
+				std::unique_ptr<HistoryRepa> hrs;
+				std::ranlux48_base gen((unsigned int)pp.seed);
+				if (ok && qqr.size())
+				{
+					// EVAL(*hrr);
+					if (qqr.size() < hrr->dimension)
+					{
+						SizeList vv(qqr.begin(),qqr.end());
+						hr = hrhrred(vv.size(), vv.data(), *hrr);
+					}
+					else
+						hr = std::move(hrr);
+					// EVAL(*hr);
+					hrs = hrshuffle(*hr,gen);
+					// EVAL(*hrs);
+				}
+				if (ok && qqa.size())
+				{
+					auto has = hashuffle(*haa,gen);				
+					auto hra = std::make_unique<HistoryRepa>();
+					auto hras = std::make_unique<HistoryRepa>();	
+					{					
+						auto n = qqa.size();
+						hra->dimension = n;
+						hras->dimension = n;
+						hra->vectorVar = new std::size_t[n];
+						hras->vectorVar = new std::size_t[n];
+						hra->shape = new std::size_t[n];
+						hras->shape = new std::size_t[n];
+						auto za = sliceSizeA;
+						hra->size = za;
+						hras->size = za;
+						hra->evient = false;
+						hras->evient = false;
+						hra->arr = new unsigned char[za*n];
+						hras->arr = new unsigned char[za*n];
+						auto rra = hra->arr;
+						auto rras = hras->arr;
+						std::memset(rra, 0, za*n);
+						std::memset(rras, 0, za*n);
+						auto na = haa->capacity;
+						auto raa = haa->arr;						
+						auto ras = has->arr;
+						{
+							std::size_t i = 0;
+							for (auto p : qqa)
+							{
+								auto v = p.first;
+								hra->vectorVar[i] = v;	
+								hras->vectorVar[i] = v;	
+								hra->shape[i] = 2;
+								hras->shape[i] = 2;
+								i++;						
+							}
+						}
+						auto& mvv = hra->mapVarInt();						
+						for (std::size_t i = 0; i < na; i++)
+						{
+							for (std::size_t j = 0; j < za; j++)
+							{
+								{
+									auto v = raa[j*na + i];
+									if (v)
+									{
+										auto iv = slppa.find(v);
+										if (iv != slppa.end())
+										{
+											auto& hr1 = iv->second;
+											auto nr1 = hr1->capacity;
+											auto rr1 = hr1->arr;
+											for (std::size_t k = 0; k < nr1; k++)
+											{
+												auto w = rr1[k];
+												if (w)
+												{
+													auto iw = mvv.find(w);
+													if (iw != mvv.end())
+														rra[iw->second * za + j] = 1;
+												}
+											}
+										}
+										else
+										{
+											auto iw = mvv.find(v);
+											if (iw != mvv.end())
+												rra[iw->second * za + j] = 1;
+										}
+									}								
+								}
+								{
+									auto v = ras[j*na + i];
+									if (v)
+									{
+										auto iv = slppa.find(v);
+										if (iv != slppa.end())
+										{
+											auto& hr1 = iv->second;
+											auto nr1 = hr1->capacity;
+											auto rr1 = hr1->arr;
+											for (std::size_t k = 0; k < nr1; k++)
+											{
+												auto w = rr1[k];
+												if (w)
+												{
+													auto iw = mvv.find(w);
+													if (iw != mvv.end())
+														rras[iw->second * za + j] = 1;
+												}
+											}
+										}
+										else
+										{
+											auto iw = mvv.find(v);
+											if (iw != mvv.end())
+												rras[iw->second * za + j] = 1;
+										}
+									}								
+								}
+							}						
+						}													
+					}					
+					// EVAL(*hra);					
+					// EVAL(*hras);					
+					if (hr)
+					{
+						hr = hrjoin(HistoryRepaPtrList{std::move(hr),std::move(hra)});
+						hrs = hrjoin(HistoryRepaPtrList{std::move(hrs),std::move(hras)});
+					}
+					else
+					{
+						hr = std::move(hra);
+						hrs = std::move(hras);
+					}	
+					// EVAL(*hr);		
+					// EVAL(*hrs);					
+				}
+				// check consistent reduction
+				if (ok)
+				{
+					ok = ok && hr && hrs 
+						&& hr->dimension == (qqr.size() + qqa.size()) 
+						&& hr->dimension == hrs->dimension 
+						&& hr->size == sliceSizeA
+						&& hr->size == hrs->size;
+					if (!ok)
+					{
+						LOG "Active::induce\terror: inconsistent reduction" UNLOG
+						break;
+					}	
+				}
+				if (ok && this->logging)
+				{
+					LOG "Active::induce model\tdimension: " << hr->dimension << "\tsize: " << hr->size UNLOG
+				}
+				
 				if (ok && this->logging)
 				{
 					LOG "Active::induce model\tslice: " << sliceA << "\tslice size: " << sliceSizeA << "\ttime " << ((sec)(clk::now() - mark)).count() << "s" UNLOG
