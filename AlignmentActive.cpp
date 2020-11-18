@@ -21,6 +21,8 @@
 
 using namespace Alignment;
 
+const double repaRounding = 1e-6;
+
 typedef std::chrono::duration<double> sec;
 typedef std::chrono::high_resolution_clock clk;
 
@@ -45,9 +47,10 @@ std::size_t Alignment::ActiveSystem::next(int bitsA)
 	auto bitsDiff = bitsA - this->bits;
 	auto blockA = ((this->block >> bitsDiff) + 1) << bitsDiff;
 	this->block  = blockA + (1 << bitsDiff) - 1;
+	if (this->block > (std::size_t(-1) >> bits))
+		throw std::out_of_range("ActiveSystem::next");
 	return blockA << bits;
 }
-
 
 ActiveEventsRepa::ActiveEventsRepa(std::size_t referencesA) : references(referencesA)
 {
@@ -484,6 +487,13 @@ bool Alignment::Active::induce(const ActiveInduceParameters& pp)
 	auto prents = histogramRepaRedsListEntropy;
 	auto hrshuffle = historyRepasShuffle_us;
 	auto hashuffle = historySparseArrayShuffle_us;
+	auto frvars = fudRepasSetVar;
+	auto frder = fudRepasDerived;
+	auto frund = fudRepasUnderlying;
+	auto llfr = setVariablesListTransformRepasFudRepa_u;
+	auto frmul = historyRepasFudRepasMultiply_up;
+	auto frdep = fudRepasSetVarsDepends;
+	auto layerer = parametersLayererMaxRollByMExcludedSelfHighestLogIORepa_up;
 		
 	bool ok = true;
 	if (this->terminate)
@@ -528,8 +538,12 @@ bool Alignment::Active::induce(const ActiveInduceParameters& pp)
 						auto sliceSizeB = this->slicesSetEvent[sliceB].size();
 						if (sliceSizeB > sliceSizeA)
 						{
-							sliceA = sliceB;
-							sliceSizeA = sliceSizeB;
+							auto it = this->sliceFailsSize.find(sliceB);
+							if (it == this->sliceFailsSize.end() || it->second < sliceSizeB)
+							{
+								sliceA = sliceB;
+								sliceSizeA = sliceSizeB;							
+							}
 						}
 					}				
 				}
@@ -632,21 +646,27 @@ bool Alignment::Active::induce(const ActiveInduceParameters& pp)
 					LOG "Active::induce copy\tslice: " << sliceA << "\tslice size: " << sliceSizeA << "\trepa dimension: " << (hrr ? hrr->dimension : 0) << "\tsparse capacity: " << (haa ? haa->capacity : 0) << "\tsparse paths: " << slppa.size() << "\ttime " << ((sec)(clk::now() - mark)).count() << "s" UNLOG
 				}	
 			}
+			// check consistent copy
+			if (ok)
+			{
+				ok = ok && (hrr || haa);
+				ok = ok && (!hrr || (hrr->dimension > 0 && hrr->size == sliceSizeA && hrr->arr));
+				ok = ok && (!haa || (haa->capacity > 0 && haa->size == sliceSizeA && haa->arr));
+				if (!ok)
+				{
+					LOG "Active::induce\terror: inconsistent copy" UNLOG
+					break;
+				}	
+			}
+			bool fail = false;
+			std::unique_ptr<HistoryRepa> hr;
+			std::unique_ptr<FudRepa> fr;
+			SizeList kk;
 			// induce while unlocked
-			if (ok && (hrr || haa))
+			if (ok)
 			{
 				auto mark = (ok && this->logging) ? clk::now() : std::chrono::time_point<clk>();
-				// check consistent copy
-				if (ok)
-				{
-					ok = ok && (!hrr || (hrr->dimension > 0 && hrr->size == sliceSizeA && hrr->arr));
-					ok = ok && (!haa || (haa->capacity > 0 && haa->size == sliceSizeA && haa->arr));
-					if (!ok)
-					{
-						LOG "Active::induce\terror: inconsistent copy" UNLOG
-						break;
-					}	
-				}
+
 				SizeSizeUMap qqa;
 				std::unordered_map<std::size_t, SizeSet> mma;
 				// prepare for the sparse entropy calculations
@@ -712,54 +732,63 @@ bool Alignment::Active::induce(const ActiveInduceParameters& pp)
 						// EVAL(*hrpr(vv.size(), vv.data(), *hrr));
 						// EVAL(*eer);
 						for (auto p : *eer)
-							ee.push_back(DoubleSizePair(-p.first,p.second));
+							if (p.first > repaRounding)
+								ee.push_back(DoubleSizePair(-p.first,p.second));
 					}
 					// EVAL(ee);
 					if (qqa.size())
 					{
-						std::map<double, SizeSet> eem;
-						double f = 1.0/(double)sliceSizeA;
+						std::map<std::size_t, SizeSet> eem;
 						for (auto p : qqa)		
 						{
-							double a = (double)p.second * f;
-							double e = a * std::log(a) + (1.0-a) * std::log(1.0-a);
-							auto v = p.first; 
-							auto& xx = eem[e];
-							if (xx.size())
+							if (p.second > 0 && p.second < sliceSizeA)
 							{
-								auto iv = mma.find(v);
-								if (iv != mma.end())
+								auto v = p.first; 
+								auto& xx = eem[p.second];
+								if (xx.size())
 								{
-									bool found = false;
-									for (auto w : xx)
+									auto iv = mma.find(v);
+									if (iv != mma.end())
 									{
-										if (iv->second.find(w) != iv->second.end())
+										bool found = false;
+										for (auto w : xx)
 										{
-											found = true;
-											break;
+											if (iv->second.find(w) != iv->second.end())
+											{
+												found = true;
+												break;
+											}
 										}
+										if (!found)								
+											xx.insert(v);
 									}
-									if (!found)								
+									else
 										xx.insert(v);
+									SizeSet yy(xx);
+									for (auto w : yy)
+									{
+										auto iw = mma.find(w);
+										if (iw != mma.end() && iw->second.find(v) != iw->second.end())
+											xx.erase(w);
+									}
 								}
 								else
 									xx.insert(v);
-								SizeSet yy(xx);
-								for (auto w : yy)
-								{
-									auto iw = mma.find(w);
-									if (iw != mma.end() && iw->second.find(v) != iw->second.end())
-										xx.erase(w);
-								}
 							}
-							else
-								xx.insert(v);
 						}	
+						// EVAL(eem);
+						double f = 1.0/(double)sliceSizeA;
 						for (auto& p : eem)	
-							for (auto& q : p.second)								
-								ee.push_back(DoubleSizePair(p.first,q));
+							for (auto& q : p.second)	
+							{
+								double a = (double)p.first * f;
+								double e = -(a * std::log(a) + (1.0-a) * std::log(1.0-a));
+								if (e > repaRounding)
+									ee.push_back(DoubleSizePair(-e,q));
+							}
 					}
 					std::sort(ee.begin(), ee.end());
+					// EVAL(ee.size());
 					// EVAL(ee);
 					SizeUSet qq;
 					qq.reserve(ee.size());
@@ -776,178 +805,370 @@ bool Alignment::Active::induce(const ActiveInduceParameters& pp)
 					for (auto v : qqa1)
 						if (qq.find(v) == qq.end())
 							qqa.erase(v);
+					for (auto v : qqr)
+						qqa.erase(v);
+					fail = ok && !qqr.size() && !qqa.size();
 					if (ok && this->logging)
 					{
-						LOG "Active::induce model\trepa dimension: " << qqr.size() << "\tsparse dimension: " << qqa.size() UNLOG
+						if (!fail)
+						{
+							LOG "Active::induce model\trepa dimension: " << qqr.size() << "\tsparse dimension: " << qqa.size() UNLOG							
+						}
+						else
+						{
+							LOG "Active::induce model\tno entropy"  UNLOG
+						}
 					}	
 					// EVAL(qqr.size());
 					// EVAL(qqr);
 					// EVAL(qqa.size());
 					// EVAL(qqa);
 				}	
-
-				std::unique_ptr<HistoryRepa> hr;
-				std::unique_ptr<HistoryRepa> hrs;
-				std::ranlux48_base gen((unsigned int)pp.seed);
-				if (ok && qqr.size())
+				if (ok && !fail)
 				{
-					// EVAL(*hrr);
-					if (qqr.size() < hrr->dimension)
+					std::unique_ptr<HistoryRepa> hrs;
+					std::ranlux48_base gen((unsigned int)pp.seed);
+					if (ok && qqr.size())
 					{
-						SizeList vv(qqr.begin(),qqr.end());
-						hr = hrhrred(vv.size(), vv.data(), *hrr);
-					}
-					else
-						hr = std::move(hrr);
-					// EVAL(*hr);
-					hrs = hrshuffle(*hr,gen);
-					// EVAL(*hrs);
-				}
-				if (ok && qqa.size())
-				{
-					auto has = hashuffle(*haa,gen);				
-					auto hra = std::make_unique<HistoryRepa>();
-					auto hras = std::make_unique<HistoryRepa>();	
-					{					
-						auto n = qqa.size();
-						hra->dimension = n;
-						hras->dimension = n;
-						hra->vectorVar = new std::size_t[n];
-						hras->vectorVar = new std::size_t[n];
-						hra->shape = new std::size_t[n];
-						hras->shape = new std::size_t[n];
-						auto za = sliceSizeA;
-						hra->size = za;
-						hras->size = za;
-						hra->evient = false;
-						hras->evient = false;
-						hra->arr = new unsigned char[za*n];
-						hras->arr = new unsigned char[za*n];
-						auto rra = hra->arr;
-						auto rras = hras->arr;
-						std::memset(rra, 0, za*n);
-						std::memset(rras, 0, za*n);
-						auto na = haa->capacity;
-						auto raa = haa->arr;						
-						auto ras = has->arr;
+						// EVAL(*hrr);
+						if (qqr.size() < hrr->dimension)
 						{
-							std::size_t i = 0;
-							for (auto p : qqa)
+							SizeList vv(qqr.begin(),qqr.end());
+							hr = hrhrred(vv.size(), vv.data(), *hrr);
+						}
+						else
+							hr = std::move(hrr);
+						// EVAL(*hr);
+						hrs = hrshuffle(*hr,gen);
+						// EVAL(*hrs);
+					}
+					if (ok && qqa.size())
+					{
+						auto has = hashuffle(*haa,gen);				
+						auto hra = std::make_unique<HistoryRepa>();
+						auto hras = std::make_unique<HistoryRepa>();	
+						{					
+							auto n = qqa.size();
+							hra->dimension = n;
+							hras->dimension = n;
+							hra->vectorVar = new std::size_t[n];
+							hras->vectorVar = new std::size_t[n];
+							hra->shape = new std::size_t[n];
+							hras->shape = new std::size_t[n];
+							auto za = sliceSizeA;
+							hra->size = za;
+							hras->size = za;
+							hra->evient = false;
+							hras->evient = false;
+							hra->arr = new unsigned char[za*n];
+							hras->arr = new unsigned char[za*n];
+							auto rra = hra->arr;
+							auto rras = hras->arr;
+							std::memset(rra, 0, za*n);
+							std::memset(rras, 0, za*n);
+							auto na = haa->capacity;
+							auto raa = haa->arr;						
+							auto ras = has->arr;
 							{
-								auto v = p.first;
-								hra->vectorVar[i] = v;	
-								hras->vectorVar[i] = v;	
-								hra->shape[i] = 2;
-								hras->shape[i] = 2;
-								i++;						
+								std::size_t i = 0;
+								for (auto p : qqa)
+								{
+									auto v = p.first;
+									hra->vectorVar[i] = v;	
+									hras->vectorVar[i] = v;	
+									hra->shape[i] = 2;
+									hras->shape[i] = 2;
+									i++;						
+								}
+							}
+							auto& mvv = hra->mapVarInt();						
+							for (std::size_t i = 0; i < na; i++)
+							{
+								for (std::size_t j = 0; j < za; j++)
+								{
+									{
+										auto v = raa[j*na + i];
+										if (v)
+										{
+											auto iv = slppa.find(v);
+											if (iv != slppa.end())
+											{
+												auto& hr1 = iv->second;
+												auto nr1 = hr1->capacity;
+												auto rr1 = hr1->arr;
+												for (std::size_t k = 0; k < nr1; k++)
+												{
+													auto w = rr1[k];
+													if (w)
+													{
+														auto iw = mvv.find(w);
+														if (iw != mvv.end())
+															rra[iw->second * za + j] = 1;
+													}
+												}
+											}
+											else
+											{
+												auto iw = mvv.find(v);
+												if (iw != mvv.end())
+													rra[iw->second * za + j] = 1;
+											}
+										}								
+									}
+									{
+										auto v = ras[j*na + i];
+										if (v)
+										{
+											auto iv = slppa.find(v);
+											if (iv != slppa.end())
+											{
+												auto& hr1 = iv->second;
+												auto nr1 = hr1->capacity;
+												auto rr1 = hr1->arr;
+												for (std::size_t k = 0; k < nr1; k++)
+												{
+													auto w = rr1[k];
+													if (w)
+													{
+														auto iw = mvv.find(w);
+														if (iw != mvv.end())
+															rras[iw->second * za + j] = 1;
+													}
+												}
+											}
+											else
+											{
+												auto iw = mvv.find(v);
+												if (iw != mvv.end())
+													rras[iw->second * za + j] = 1;
+											}
+										}								
+									}
+								}						
+							}													
+						}					
+						// EVAL(*hra);					
+						// EVAL(*hras);					
+						if (hr)
+						{
+							hr = hrjoin(HistoryRepaPtrList{std::move(hr),std::move(hra)});
+							hrs = hrjoin(HistoryRepaPtrList{std::move(hrs),std::move(hras)});
+						}
+						else
+						{
+							hr = std::move(hra);
+							hrs = std::move(hras);
+						}	
+						// EVAL(*hr);		
+						// EVAL(*hrs);					
+					}
+					// check consistent reduction
+					if (ok)
+					{
+						ok = ok && hr && hrs 
+							&& hr->dimension == (qqr.size() + qqa.size()) 
+							&& hr->dimension == hrs->dimension 
+							&& hr->size == sliceSizeA
+							&& hr->size == hrs->size;
+						if (!ok)
+						{
+							LOG "Active::induce\terror: inconsistent reduction" UNLOG
+							break;
+						}	
+					}
+					// check active system
+					if (ok)
+					{
+						ok = ok && this->system;
+						if (!ok)
+						{
+							LOG "Active::induce\terror: no system" UNLOG
+							break;
+						}	
+					}
+					if (ok && this->logging)
+					{
+						LOG "Active::induce model\tdimension: " << hr->dimension << "\tsize: " << hr->size UNLOG
+					}						
+					// layerer
+					if (ok)
+					{
+						try
+						{
+							SizeList vv;
+							{
+								auto n = hr->dimension;
+								auto vv1 = hr->vectorVar;
+								vv.reserve(n);
+								for (std::size_t i = 0; i < n; i++)
+									vv.push_back(vv1[i]);
+							}
+							auto blockA = this->var >> this->bits;
+							if (((this->var + pp.pmax * pp.bmax * pp.lmax) >> this->bits) > blockA)
+							{
+								this->var = this->system->next(this->bits);
+								blockA = this->var >> this->bits;
+								if (((this->var + pp.pmax * pp.bmax * pp.lmax) >> this->bits) > blockA)
+								{
+									ok = false;
+									LOG "Active::induce\terror: cannot assign id" UNLOG
+									break;
+								}									
+							}
+							auto t = layerer(pp.wmax, pp.lmax, pp.xmax, pp.omax, pp.bmax, pp.mmax, pp.umax, pp.pmax, pp.tint, vv, *hr, *hrs, this->log, this->logging, this->var);
+							if ((this->var >> this->bits) > blockA)
+							{
+								this->var = this->system->next(this->bits);
+								blockA = this->var >> this->bits;
+								t = layerer(pp.wmax, pp.lmax, pp.xmax, pp.omax, pp.bmax, pp.mmax, pp.umax, pp.pmax, pp.tint, vv, *hr, *hrs, this->log, this->logging, this->var);
+								if ((this->var >> this->bits) > blockA)
+								{
+									ok = false;
+									LOG "Active::induce\terror: cannot assign id" UNLOG
+									break;
+								}									
+							}
+							fr = std::move(std::get<0>(t));
+							auto mm = std::move(std::get<1>(t));
+							fail = !mm || !mm->size();
+							TRUTH(fail);
+							if (ok && !fail)
+							{
+								kk = mm->back().second;
+								SizeUSet kk1(kk.begin(), kk.end());
+								SizeUSet vv1(vv.begin(), vv.end());
+								fr = llfr(vv1, *frdep(*fr, kk1));
+								EVAL(mm->size());			
+								EVAL(mm->back());
+								EVAL(*mm);
+								auto& a = mm->back().first;
+								auto m = kk.size();
+								auto z = hr->size;
+								EVAL(m);
+								EVAL(a);			
+								EVAL(z);	
+								EVAL(100.0*(exp(a/z/(m-1))-1.0));
+								EVAL(fudRepasSize(*fr));
+								EVAL(frvars(*fr)->size());
+								EVAL(frder(*fr)->size());
+								EVAL(frund(*fr)->size());
+								EVAL(sorted(*frund(*fr)));
 							}
 						}
-						auto& mvv = hra->mapVarInt();						
-						for (std::size_t i = 0; i < na; i++)
+						catch (const std::out_of_range& e)
 						{
-							for (std::size_t j = 0; j < za; j++)
-							{
-								{
-									auto v = raa[j*na + i];
-									if (v)
-									{
-										auto iv = slppa.find(v);
-										if (iv != slppa.end())
-										{
-											auto& hr1 = iv->second;
-											auto nr1 = hr1->capacity;
-											auto rr1 = hr1->arr;
-											for (std::size_t k = 0; k < nr1; k++)
-											{
-												auto w = rr1[k];
-												if (w)
-												{
-													auto iw = mvv.find(w);
-													if (iw != mvv.end())
-														rra[iw->second * za + j] = 1;
-												}
-											}
-										}
-										else
-										{
-											auto iw = mvv.find(v);
-											if (iw != mvv.end())
-												rra[iw->second * za + j] = 1;
-										}
-									}								
-								}
-								{
-									auto v = ras[j*na + i];
-									if (v)
-									{
-										auto iv = slppa.find(v);
-										if (iv != slppa.end())
-										{
-											auto& hr1 = iv->second;
-											auto nr1 = hr1->capacity;
-											auto rr1 = hr1->arr;
-											for (std::size_t k = 0; k < nr1; k++)
-											{
-												auto w = rr1[k];
-												if (w)
-												{
-													auto iw = mvv.find(w);
-													if (iw != mvv.end())
-														rras[iw->second * za + j] = 1;
-												}
-											}
-										}
-										else
-										{
-											auto iw = mvv.find(v);
-											if (iw != mvv.end())
-												rras[iw->second * za + j] = 1;
-										}
-									}								
-								}
-							}						
-						}													
-					}					
-					// EVAL(*hra);					
-					// EVAL(*hras);					
-					if (hr)
-					{
-						hr = hrjoin(HistoryRepaPtrList{std::move(hr),std::move(hra)});
-						hrs = hrjoin(HistoryRepaPtrList{std::move(hrs),std::move(hras)});
+							ok = false;
+							LOG "Active::induce\tout of range exception: " << e.what() UNLOG
+							break;
+						}
 					}
-					else
-					{
-						hr = std::move(hra);
-						hrs = std::move(hras);
-					}	
-					// EVAL(*hr);		
-					// EVAL(*hrs);					
 				}
-				// check consistent reduction
-				if (ok)
-				{
-					ok = ok && hr && hrs 
-						&& hr->dimension == (qqr.size() + qqa.size()) 
-						&& hr->dimension == hrs->dimension 
-						&& hr->size == sliceSizeA
-						&& hr->size == hrs->size;
-					if (!ok)
-					{
-						LOG "Active::induce\terror: inconsistent reduction" UNLOG
-						break;
-					}	
-				}
-				if (ok && this->logging)
-				{
-					LOG "Active::induce model\tdimension: " << hr->dimension << "\tsize: " << hr->size UNLOG
-				}
-				
 				if (ok && this->logging)
 				{
 					LOG "Active::induce model\tslice: " << sliceA << "\tslice size: " << sliceSizeA << "\ttime " << ((sec)(clk::now() - mark)).count() << "s" UNLOG
 				}				
-				
 			}
+			// add new fud to locked active
+			if (ok && !fail)	
+			{
+				
+				// auto dr = std::make_unique<ApplicationRepa>();
+				// {
+					// dr->substrate = vv;
+					// dr->fud = std::make_shared<FudRepa>();
+					// dr->slices = std::make_shared<SizeTree>();	
+					// auto vd = std::make_shared<Variable>(d);
+					// auto vl = std::make_shared<Variable>("s");
+					// auto vf = std::make_shared<Variable>((int)f);
+					// auto vdf = std::make_shared<Variable>(vd, vf);
+					// auto vfl = std::make_shared<Variable>(vdf, vl);
+					// SizeUSet kk1(kk.begin(), kk.end());
+					// SizeUSet vv1(vv.begin(), vv.end());
+					// auto gr = llfr(vv1, *frdep(*fr, kk1));
+					// auto ar = hrred(1.0, m, kk.data(), *frmul(tint, *hr, *gr));
+					// SizeList sl;
+					// TransformRepaPtrList ll;
+					// std::size_t sz = 1;
+					// auto skk = ar->shape;
+					// auto rr0 = ar->arr;
+					// for (std::size_t i = 0; i < m; i++)
+						// sz *= skk[i];
+					// sl.reserve(sz);
+					// ll.reserve(sz);
+					// bool remainder = false;
+					// std::size_t b = 1;
+					// auto& llu = ur->listVarSizePair;
+					// for (std::size_t i = 0; i < sz; i++)
+					// {
+						// if (rr0[i] <= 0.0)
+						// {
+							// remainder = true;
+							// continue;
+						// }
+						// auto tr = std::make_shared<TransformRepa>();
+						// tr->dimension = m;
+						// tr->vectorVar = new std::size_t[m];
+						// auto ww = tr->vectorVar;
+						// tr->shape = new std::size_t[m];
+						// auto sh = tr->shape;
+						// for (std::size_t j = 0; j < m; j++)
+						// {
+							// ww[j] = kk[j];
+							// sh[j] = skk[j];
+						// }
+						// tr->arr = new unsigned char[sz];
+						// auto rr = tr->arr;
+						// for (std::size_t j = 0; j < sz; j++)
+							// rr[j] = 0;
+						// rr[i] = 1;
+						// tr->valency = 2;
+						// auto vb = std::make_shared<Variable>((int)b++);
+						// auto vflb = std::make_shared<Variable>(vfl, vb);
+						// llu.push_back(VarSizePair(vflb, 2));
+						// auto w = llu.size() - 1;
+						// tr->derived = w;
+						// sl.push_back(w);
+						// ll.push_back(tr);
+					// }
+					// if (remainder)
+					// {
+						// auto tr = std::make_shared<TransformRepa>();
+						// tr->dimension = m;
+						// tr->vectorVar = new std::size_t[m];
+						// auto ww = tr->vectorVar;
+						// tr->shape = new std::size_t[m];
+						// auto sh = tr->shape;
+						// for (std::size_t j = 0; j < m; j++)
+						// {
+							// ww[j] = kk[j];
+							// sh[j] = skk[j];
+						// }
+						// tr->arr = new unsigned char[sz];
+						// auto rr = tr->arr;
+						// for (std::size_t j = 0; j < sz; j++)
+							// rr[j] = rr0[j] <= 0.0 ? 1 : 0;
+						// tr->valency = 2;
+						// auto vb = std::make_shared<Variable>((int)b++);
+						// auto vflb = std::make_shared<Variable>(vfl, vb);
+						// llu.push_back(VarSizePair(vflb, 2));
+						// auto w = llu.size() - 1;
+						// tr->derived = w;
+						// sl.push_back(w);
+						// ll.push_back(tr);
+					// }
+					// dr->fud->layers.insert(dr->fud->layers.end(), gr->layers.begin(), gr->layers.end());
+					// dr->fud->layers.push_back(ll);
+					// dr->slices->_list.reserve(sz);
+					// for (auto& s : sl)
+						// dr->slices->_list.push_back(SizeSizeTreePair(s, std::make_shared<SizeTree>()));			
+				// }
+							
+				// update this decomp mapVarParent and mapVarInt
+				// update eventsSlice and slicesSetEvent
+				// tidy slicesInduce and sliceFailsSize
+				// tidy new events
+			}
+
 			EVAL(sliceA);
 			EVAL(sliceSizeA);
 			// EVAL(*hrr);

@@ -102,6 +102,7 @@ namespace Alignment
 		std::size_t induceThreshold;
 		SizeSet slicesInduce;
 		SizeSet induceVarExlusions;
+		SizeSizeMap sliceFailsSize;
 		
 		bool update(const ActiveUpdateParameters&);
 		bool (*updateCallback)(const SizeSet& eventsA, std::size_t eventA, std::size_t historyEventA, std::size_t sliceA);
