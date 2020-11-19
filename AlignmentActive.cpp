@@ -654,7 +654,7 @@ bool Alignment::Active::induce(const ActiveInduceParameters& pp)
 				}
 				if (ok && this->logging)
 				{
-					LOG "induce copy\tslice: " << sliceA << "\tslice size: " << sliceSizeA << "\trepa dimension: " << (hrr ? hrr->dimension : 0) << "\tsparse capacity: " << (haa ? haa->capacity : 0) << "\tsparse paths: " << slppa.size() << "\ttime " << ((sec)(clk::now() - mark)).count() << "s" UNLOG
+					LOG "induce copy\tslice: " << sliceA << "\tslice size: " << sliceSizeA << "\trepa dimension: " << (hrr ? hrr->dimension : 0) << "\tsparse capacity: " << (haa ? haa->capacity : 0) << "\tsparse paths: " << slppa.size() << "\tvariable: " << varA << "\ttime " << ((sec)(clk::now() - mark)).count() << "s" UNLOG
 				}	
 			}
 			// check consistent copy
@@ -986,16 +986,6 @@ bool Alignment::Active::induce(const ActiveInduceParameters& pp)
 							break;
 						}	
 					}
-					// check active system
-					if (ok)
-					{
-						ok = ok && this->system;
-						if (!ok)
-						{
-							LOG "induce\terror: no system" UNLOG
-							break;
-						}	
-					}
 					if (ok && this->logging)
 					{
 						LOG "induce model\tdimension: " << hr->dimension << "\tsize: " << hr->size UNLOG
@@ -1003,6 +993,8 @@ bool Alignment::Active::induce(const ActiveInduceParameters& pp)
 					// layerer
 					if (ok)
 					{
+						double algn = 0.0;
+						double diagonal = 0.0;
 						try
 						{
 							SizeList vv;
@@ -1017,28 +1009,21 @@ bool Alignment::Active::induce(const ActiveInduceParameters& pp)
 							fr = std::move(std::get<0>(t));
 							auto mm = std::move(std::get<1>(t));
 							fail = !fr || (!mm || !mm->size());
-							TRUTH(fail);
 							if (ok && !fail)
 							{
 								kk = mm->back().second;
 								SizeUSet kk1(kk.begin(), kk.end());
 								SizeUSet vv1(vv.begin(), vv.end());
 								fr = llfr(vv1, *frdep(*fr, kk1));
-								EVAL(mm->size());			
-								EVAL(mm->back());
-								EVAL(*mm);
-								auto& a = mm->back().first;
+								algn = mm->back().first;
 								auto m = kk.size();
 								auto z = hr->size;
-								EVAL(m);
-								EVAL(a);			
-								EVAL(z);	
-								EVAL(100.0*(exp(a/z/(m-1))-1.0));
-								EVAL(fudRepasSize(*fr));
-								EVAL(frvars(*fr)->size());
-								EVAL(frder(*fr)->size());
-								EVAL(frund(*fr)->size());
-								EVAL(sorted(*frund(*fr)));
+								diagonal = 100.0*(exp(algn/z/(m-1))-1.0);
+								// EVAL(fudRepasSize(*fr));
+								// EVAL(frvars(*fr)->size());
+								// EVAL(frder(*fr)->size());
+								// EVAL(frund(*fr)->size());
+								// EVAL(sorted(*frund(*fr)));
 							}
 						}
 						catch (const std::out_of_range& e)
@@ -1047,11 +1032,22 @@ bool Alignment::Active::induce(const ActiveInduceParameters& pp)
 							LOG "induce\tout of range exception: " << e.what() UNLOG
 							break;
 						}
+						if (ok && this->logging)
+						{
+							if (!fail)
+							{
+								LOG "induce model\tder vars algn density: " << algn << "\timpl bi-valency percent: " << diagonal << "\tder vars cardinality: " << kk.size() UNLOG							
+							}
+							else
+							{
+								LOG "induce model\tno alignment"  UNLOG
+							}
+						}	
 					}
 				}
 				if (ok && this->logging)
 				{
-					LOG "induce model\tslice: " << sliceA << "\tslice size: " << sliceSizeA << "\ttime " << ((sec)(clk::now() - mark)).count() << "s" UNLOG
+					LOG "induce model\ttime " << ((sec)(clk::now() - mark)).count() << "s" UNLOG
 				}				
 			}
 			// add new fud to locked active
@@ -1059,7 +1055,16 @@ bool Alignment::Active::induce(const ActiveInduceParameters& pp)
 			{
 				auto mark = (ok && this->logging) ? clk::now() : std::chrono::time_point<clk>();
 				std::lock_guard<std::mutex> guard(this->mutex);		
-				
+				// check active system
+				if (ok)
+				{
+					ok = ok && this->system;
+					if (!ok)
+					{
+						LOG "induce\terror: no system" UNLOG
+						break;
+					}	
+				}
 				// remap kk and fr with block ids
 				if (ok)
 				{
@@ -1083,10 +1088,10 @@ bool Alignment::Active::induce(const ActiveInduceParameters& pp)
 					fr->reframe_u(nn);
 					for (std::size_t i = 0; i < kk.size(); i++)	
 						kk[i] = nn[kk[i]];
+					EVAL(kk);
+					EVAL(sorted(*frvars(*fr)));			
 				}
 					
-				EVAL(kk);
-				EVAL(sorted(*frvars(*fr)));			
 				
 				// auto dr = std::make_unique<ApplicationRepa>();
 				// {
@@ -1186,7 +1191,7 @@ bool Alignment::Active::induce(const ActiveInduceParameters& pp)
 				
 				if (ok && this->logging)
 				{
-					LOG "induce copy\tslice: " << sliceA << "\tslice size: " << sliceSizeA << "\trepa dimension: " << (hrr ? hrr->dimension : 0) << "\tsparse capacity: " << (haa ? haa->capacity : 0) << "\tsparse paths: " << slppa.size() << "\ttime " << ((sec)(clk::now() - mark)).count() << "s" UNLOG
+					LOG "induce update\tslice: " << sliceA << "\tslice size: " << sliceSizeA << "\trepa dimension: " << (hrr ? hrr->dimension : 0) << "\tsparse capacity: " << (haa ? haa->capacity : 0) << "\tsparse paths: " << slppa.size() << "\ttime " << ((sec)(clk::now() - mark)).count() << "s" UNLOG
 				}	
 			}
 
