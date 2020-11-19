@@ -478,7 +478,6 @@ bool Alignment::Active::update(const ActiveUpdateParameters& pp)
 	return ok;
 }
 
-// assume that only one inducer so that can modify the var refs without locking active
 bool Alignment::Active::induce(const ActiveInduceParameters& pp)
 {
 	auto hrhrred = setVarsHistoryRepasHistoryRepaReduced_u;
@@ -502,6 +501,7 @@ bool Alignment::Active::induce(const ActiveInduceParameters& pp)
 	{
 		while (ok)
 		{
+			std::size_t varA = 0;
 			std::size_t sliceA = 0;
 			std::size_t sliceSizeA = 0;			
 			std::unique_ptr<HistoryRepa> hrr;
@@ -553,6 +553,7 @@ bool Alignment::Active::induce(const ActiveInduceParameters& pp)
 				// copy events from evient active history to varient selection
 				if (ok)
 				{
+					varA = this->var;
 					auto& setEventsA = this->slicesSetEvent[sliceA];
 					SizeList eventsA(setEventsA.begin(),setEventsA.end());			
 					if (ok && llr.size())
@@ -666,7 +667,6 @@ bool Alignment::Active::induce(const ActiveInduceParameters& pp)
 			if (ok)
 			{
 				auto mark = (ok && this->logging) ? clk::now() : std::chrono::time_point<clk>();
-
 				SizeSizeUMap qqa;
 				std::unordered_map<std::size_t, SizeSet> mma;
 				// prepare for the sparse entropy calculations
@@ -1003,34 +1003,10 @@ bool Alignment::Active::induce(const ActiveInduceParameters& pp)
 								for (std::size_t i = 0; i < n; i++)
 									vv.push_back(vv1[i]);
 							}
-							auto blockA = this->var >> this->bits;
-							if (((this->var + pp.pmax * pp.bmax * pp.lmax) >> this->bits) > blockA)
-							{
-								this->var = this->system->next(this->bits);
-								blockA = this->var >> this->bits;
-								if (((this->var + pp.pmax * pp.bmax * pp.lmax) >> this->bits) > blockA)
-								{
-									ok = false;
-									LOG "Active::induce\terror: cannot assign id" UNLOG
-									break;
-								}									
-							}
-							auto t = layerer(pp.wmax, pp.lmax, pp.xmax, pp.omax, pp.bmax, pp.mmax, pp.umax, pp.pmax, pp.tint, vv, *hr, *hrs, this->log, this->logging, this->var);
-							if ((this->var >> this->bits) > blockA)
-							{
-								this->var = this->system->next(this->bits);
-								blockA = this->var >> this->bits;
-								t = layerer(pp.wmax, pp.lmax, pp.xmax, pp.omax, pp.bmax, pp.mmax, pp.umax, pp.pmax, pp.tint, vv, *hr, *hrs, this->log, this->logging, this->var);
-								if ((this->var >> this->bits) > blockA)
-								{
-									ok = false;
-									LOG "Active::induce\terror: cannot assign id" UNLOG
-									break;
-								}									
-							}
+							auto t = layerer(pp.wmax, pp.lmax, pp.xmax, pp.omax, pp.bmax, pp.mmax, pp.umax, pp.pmax, pp.tint, vv, *hr, *hrs, this->log, this->logging, varA);
 							fr = std::move(std::get<0>(t));
 							auto mm = std::move(std::get<1>(t));
-							fail = !mm || !mm->size();
+							fail = !fr || (!mm || !mm->size());
 							TRUTH(fail);
 							if (ok && !fail)
 							{
@@ -1071,6 +1047,36 @@ bool Alignment::Active::induce(const ActiveInduceParameters& pp)
 			// add new fud to locked active
 			if (ok && !fail)	
 			{
+				auto mark = (ok && this->logging) ? clk::now() : std::chrono::time_point<clk>();
+				std::lock_guard<std::mutex> guard(this->mutex);		
+				
+				// remap kk and fr with block ids
+				if (ok)
+				{
+					auto frSize = fudRepasSize(*fr);
+					if (frSize > (1 << this->bits))
+					{
+						ok = false;
+						LOG "Active::induce\terror: block too small" << "\tfud size: " << frSize << "\tblock: " << (1 << this->bits) UNLOG
+						break;								
+					}
+					if (((this->var + frSize) >> this->bits) > (this->var >> this->bits))
+						this->var = this->system->next(this->bits);
+					SizeSizeUMap nn;
+					nn.reserve(frSize);
+					for (auto& ll : fr->layers)
+						for (auto& tr : ll)
+						{
+							nn[tr->derived] = this->var;					
+							this->var++;
+						}
+					fr->reframe_u(nn);
+					for (std::size_t i = 0; i < kk.size(); i++)	
+						kk[i] = nn[kk[i]];
+				}
+					
+				EVAL(kk);
+				EVAL(sorted(*frvars(*fr)));			
 				
 				// auto dr = std::make_unique<ApplicationRepa>();
 				// {
@@ -1167,6 +1173,11 @@ bool Alignment::Active::induce(const ActiveInduceParameters& pp)
 				// update eventsSlice and slicesSetEvent
 				// tidy slicesInduce and sliceFailsSize
 				// tidy new events
+				
+				if (ok && this->logging)
+				{
+					LOG "Active::induce copy\tslice: " << sliceA << "\tslice size: " << sliceSizeA << "\trepa dimension: " << (hrr ? hrr->dimension : 0) << "\tsparse capacity: " << (haa ? haa->capacity : 0) << "\tsparse paths: " << slppa.size() << "\ttime " << ((sec)(clk::now() - mark)).count() << "s" UNLOG
+				}	
 			}
 
 			EVAL(sliceA);
