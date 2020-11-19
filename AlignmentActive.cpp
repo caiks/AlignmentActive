@@ -42,6 +42,8 @@ std::size_t Alignment::ActiveSystem::next(int bitsA)
 	if (bitsA <= this->bits)
 	{
 		this->block++;
+		if (this->block > (std::size_t(-1) >> bits))
+			throw std::out_of_range("ActiveSystem::next");
 		return this->block << bits;
 	}
 	auto bitsDiff = bitsA - this->bits;
@@ -90,7 +92,7 @@ std::ostream& operator<<(std::ostream& out, const ActiveEventsArray& ev)
 	return out;
 }
 
-Active::Active() : terminate(false), log(log_default), historyOverflow(false), historyEvent(0), historySize(0), bits(16), var(0), varSlice(0), induceThreshold(100), logging(false), slicesPathLenMax(1), updateCallback(0)
+Active::Active() : terminate(false), log(log_default), historyOverflow(false), historyEvent(0), historySize(0), bits(16), var(0), varSlice(0), induceThreshold(100), logging(false), pathLenMax(1), updateCallback(0)
 {
 }
 
@@ -131,7 +133,7 @@ bool Alignment::Active::update(const ActiveUpdateParameters& pp)
 					ok = ok && this->underlyingEventsSparse.size() == this->underlyingHistorySparse.size();
 					if (!ok)
 					{
-						LOG "Active::update\terror: inconsistent underlying" UNLOG
+						LOG "update\terror: inconsistent underlying" UNLOG
 						break;
 					}	
 				}
@@ -200,7 +202,7 @@ bool Alignment::Active::update(const ActiveUpdateParameters& pp)
 								hrs.push_back(it->second.first);
 							else
 							{
-								LOG "Active::update\terror: lost event repa " << eventA UNLOG
+								LOG "update\terror: lost event repa " << eventA UNLOG
 							}									
 						}
 					HistorySparseArrayPtrList has;
@@ -215,7 +217,7 @@ bool Alignment::Active::update(const ActiveUpdateParameters& pp)
 								has.push_back(it->second.first);
 							else
 							{
-								LOG "Active::update\terror: lost event sparse" << eventA UNLOG
+								LOG "update\terror: lost event sparse" << eventA UNLOG
 							}									
 						}
 					if (!ok)
@@ -223,7 +225,7 @@ bool Alignment::Active::update(const ActiveUpdateParameters& pp)
 					ok = ok && this->historyEvent < this->historySize;
 					if (!ok) 
 					{
-						LOG "Active::update\terror: inconsistent historyEvent " << this->historyEvent << " compared to historySize " << this->historySize UNLOG		
+						LOG "update\terror: inconsistent historyEvent " << this->historyEvent << " compared to historySize " << this->historySize UNLOG		
 						break;
 					}
 					ok = ok && hrs.size() == this->underlyingHistoryRepa.size();
@@ -234,7 +236,7 @@ bool Alignment::Active::update(const ActiveUpdateParameters& pp)
 						ok = ok && has[h]->size == 1;
 					if (!ok) 
 					{
-						LOG "Active::update\terror: inconsistent underlying " UNLOG		
+						LOG "update\terror: inconsistent underlying " UNLOG		
 						break;
 					}
 					for (std::size_t h = 0; ok && h < hrs.size(); h++)
@@ -315,8 +317,8 @@ bool Alignment::Active::update(const ActiveUpdateParameters& pp)
 						if (v && this->slicesPath.find(v) == this->slicesPath.end())
 						{
 							this->slicesPath[v] = hr1;
-							if (n > this->slicesPathLenMax)
-								this->slicesPathLenMax = n;
+							if (n > this->pathLenMax)
+								this->pathLenMax = n;
 						}
 					}
 				}
@@ -325,7 +327,7 @@ bool Alignment::Active::update(const ActiveUpdateParameters& pp)
 					ok = ok && this->decomp;
 					if (!ok)
 					{
-						LOG "Active::update\terror: no decomp set" UNLOG
+						LOG "update\terror: no decomp set" UNLOG
 					}				
 				}
 				// apply the model
@@ -336,19 +338,27 @@ bool Alignment::Active::update(const ActiveUpdateParameters& pp)
 					ok = ok && ll;
 					if (!ok)
 					{
-						LOG "Active::update\terror: drmul failed to return a list" UNLOG
+						LOG "update\terror: drmul failed to return a list" UNLOG
 					}
 					// sync active slices
 					if (ok)
 					{
 						if (ll->size())
 							sliceA = ll->back();
-						if (this->eventsSlice.size() != this->historySize)
-							this->eventsSlice.resize(this->historySize);
-						std::size_t sliceB = this->eventsSlice[this->historyEvent];
+						if (this->historySparse.size != this->historySize)
+						{
+							auto z = this->historySize;
+							auto& hr = this->historySparse;
+							delete[] hr.arr;
+							hr.size = z;
+							hr.capacity = 1;
+							hr.arr = new std::size_t[z];
+							memset(hr.arr, 0, z*sizeof(std::size_t));
+						}
+						std::size_t sliceB = this->historySparse.arr[this->historyEvent];
 						if (!sliceA || sliceA != sliceB)
 						{
-							this->eventsSlice[this->historyEvent] = sliceA;
+							this->historySparse.arr[this->historyEvent] = sliceA;
 							auto& setA = this->slicesSetEvent[sliceA];
 							setA.insert(this->historyEvent);
 							if (this->induceThreshold && setA.size() == this->induceThreshold)
@@ -382,7 +392,7 @@ bool Alignment::Active::update(const ActiveUpdateParameters& pp)
 					}
 					if (ok && this->logging)
 					{
-						LOG "Active::update apply\tevent id: " << eventA << "\thistory id: " << this->historyEvent << "\tslice: " << sliceA << "\tslice size: " << this->slicesSetEvent[sliceA].size() << "\ttime " << ((sec)(clk::now() - mark)).count() << "s" UNLOG
+						LOG "update apply\tevent id: " << eventA << "\thistory id: " << this->historyEvent << "\tslice: " << sliceA << "\tslice size: " << this->slicesSetEvent[sliceA].size() << "\ttime " << ((sec)(clk::now() - mark)).count() << "s" UNLOG
 					}
 				}
 				// increment historyEvent
@@ -471,7 +481,7 @@ bool Alignment::Active::update(const ActiveUpdateParameters& pp)
 	} 
 	catch (const std::exception& e) 
 	{
-		LOG "Active::update error: " << e.what()  UNLOG
+		LOG "update error: " << e.what()  UNLOG
 		ok = false;
 	}
 	
@@ -526,7 +536,7 @@ bool Alignment::Active::induce(const ActiveInduceParameters& pp)
 						ok = ok && hr && hr->size == historySize && hr->capacity == 1;
 					if (!ok)
 					{
-						LOG "Active::induce\terror: inconsistent underlying" UNLOG
+						LOG "induce\terror: inconsistent underlying" UNLOG
 						break;
 					}	
 				}			
@@ -623,7 +633,7 @@ bool Alignment::Active::induce(const ActiveInduceParameters& pp)
 						haa->arr = new std::size_t[za*na];
 						auto raa = haa->arr;
 						slppa.reserve(za*na);
-						slppalen = this->slicesPathLenMax;
+						slppalen = this->pathLenMax;
 						for (std::size_t i = 0; i < na; i++)
 						{
 							auto& hr = lla[i];
@@ -644,7 +654,7 @@ bool Alignment::Active::induce(const ActiveInduceParameters& pp)
 				}
 				if (ok && this->logging)
 				{
-					LOG "Active::induce copy\tslice: " << sliceA << "\tslice size: " << sliceSizeA << "\trepa dimension: " << (hrr ? hrr->dimension : 0) << "\tsparse capacity: " << (haa ? haa->capacity : 0) << "\tsparse paths: " << slppa.size() << "\ttime " << ((sec)(clk::now() - mark)).count() << "s" UNLOG
+					LOG "induce copy\tslice: " << sliceA << "\tslice size: " << sliceSizeA << "\trepa dimension: " << (hrr ? hrr->dimension : 0) << "\tsparse capacity: " << (haa ? haa->capacity : 0) << "\tsparse paths: " << slppa.size() << "\ttime " << ((sec)(clk::now() - mark)).count() << "s" UNLOG
 				}	
 			}
 			// check consistent copy
@@ -655,7 +665,7 @@ bool Alignment::Active::induce(const ActiveInduceParameters& pp)
 				ok = ok && (!haa || (haa->capacity > 0 && haa->size == sliceSizeA && haa->arr));
 				if (!ok)
 				{
-					LOG "Active::induce\terror: inconsistent copy" UNLOG
+					LOG "induce\terror: inconsistent copy" UNLOG
 					break;
 				}	
 			}
@@ -812,11 +822,11 @@ bool Alignment::Active::induce(const ActiveInduceParameters& pp)
 					{
 						if (!fail)
 						{
-							LOG "Active::induce model\trepa dimension: " << qqr.size() << "\tsparse dimension: " << qqa.size() UNLOG							
+							LOG "induce model\trepa dimension: " << qqr.size() << "\tsparse dimension: " << qqa.size() UNLOG							
 						}
 						else
 						{
-							LOG "Active::induce model\tno entropy"  UNLOG
+							LOG "induce model\tno entropy"  UNLOG
 						}
 					}	
 					// EVAL(qqr.size());
@@ -972,7 +982,7 @@ bool Alignment::Active::induce(const ActiveInduceParameters& pp)
 							&& hr->size == hrs->size;
 						if (!ok)
 						{
-							LOG "Active::induce\terror: inconsistent reduction" UNLOG
+							LOG "induce\terror: inconsistent reduction" UNLOG
 							break;
 						}	
 					}
@@ -982,13 +992,13 @@ bool Alignment::Active::induce(const ActiveInduceParameters& pp)
 						ok = ok && this->system;
 						if (!ok)
 						{
-							LOG "Active::induce\terror: no system" UNLOG
+							LOG "induce\terror: no system" UNLOG
 							break;
 						}	
 					}
 					if (ok && this->logging)
 					{
-						LOG "Active::induce model\tdimension: " << hr->dimension << "\tsize: " << hr->size UNLOG
+						LOG "induce model\tdimension: " << hr->dimension << "\tsize: " << hr->size UNLOG
 					}						
 					// layerer
 					if (ok)
@@ -1034,14 +1044,14 @@ bool Alignment::Active::induce(const ActiveInduceParameters& pp)
 						catch (const std::out_of_range& e)
 						{
 							ok = false;
-							LOG "Active::induce\tout of range exception: " << e.what() UNLOG
+							LOG "induce\tout of range exception: " << e.what() UNLOG
 							break;
 						}
 					}
 				}
 				if (ok && this->logging)
 				{
-					LOG "Active::induce model\tslice: " << sliceA << "\tslice size: " << sliceSizeA << "\ttime " << ((sec)(clk::now() - mark)).count() << "s" UNLOG
+					LOG "induce model\tslice: " << sliceA << "\tslice size: " << sliceSizeA << "\ttime " << ((sec)(clk::now() - mark)).count() << "s" UNLOG
 				}				
 			}
 			// add new fud to locked active
@@ -1057,7 +1067,7 @@ bool Alignment::Active::induce(const ActiveInduceParameters& pp)
 					if (frSize > (1 << this->bits))
 					{
 						ok = false;
-						LOG "Active::induce\terror: block too small" << "\tfud size: " << frSize << "\tblock: " << (1 << this->bits) UNLOG
+						LOG "induce\terror: block too small" << "\tfud size: " << frSize << "\tblock: " << (1 << this->bits) UNLOG
 						break;								
 					}
 					if (((this->var + frSize) >> this->bits) > (this->var >> this->bits))
@@ -1170,13 +1180,13 @@ bool Alignment::Active::induce(const ActiveInduceParameters& pp)
 				// }
 							
 				// update this decomp mapVarParent and mapVarInt
-				// update eventsSlice and slicesSetEvent
+				// update historySparse and slicesSetEvent
 				// tidy slicesInduce and sliceFailsSize
 				// tidy new events
 				
 				if (ok && this->logging)
 				{
-					LOG "Active::induce copy\tslice: " << sliceA << "\tslice size: " << sliceSizeA << "\trepa dimension: " << (hrr ? hrr->dimension : 0) << "\tsparse capacity: " << (haa ? haa->capacity : 0) << "\tsparse paths: " << slppa.size() << "\ttime " << ((sec)(clk::now() - mark)).count() << "s" UNLOG
+					LOG "induce copy\tslice: " << sliceA << "\tslice size: " << sliceSizeA << "\trepa dimension: " << (hrr ? hrr->dimension : 0) << "\tsparse capacity: " << (haa ? haa->capacity : 0) << "\tsparse paths: " << slppa.size() << "\ttime " << ((sec)(clk::now() - mark)).count() << "s" UNLOG
 				}	
 			}
 
@@ -1192,7 +1202,7 @@ bool Alignment::Active::induce(const ActiveInduceParameters& pp)
 	} 
 	catch (const std::exception& e) 
 	{
-		LOG "Active::induce error: " << e.what()  UNLOG
+		LOG "induce error: " << e.what()  UNLOG
 		ok = false;
 	}
 	

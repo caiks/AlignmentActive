@@ -90,11 +90,11 @@ namespace Alignment
 		std::size_t historyEvent;
 		std::size_t historySize;
 		std::map<std::size_t,HistorySparseArrayPtr> slicesPath;
-		std::size_t slicesPathLenMax;
+		std::size_t pathLenMax;
 
 		std::shared_ptr<DecompFudSlicedRepa> decomp;
 		
-		SizeList eventsSlice;
+		HistorySparseArray historySparse;
 		SizeSizeSetMap slicesSetEvent;
 		
 		ActiveEventsArrayPtr eventsSparse;
