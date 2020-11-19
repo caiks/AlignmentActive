@@ -514,7 +514,8 @@ bool Alignment::Active::induce(const ActiveInduceParameters& pp)
 		{
 			std::size_t varA = 0;
 			std::size_t sliceA = 0;
-			std::size_t sliceSizeA = 0;			
+			std::size_t sliceSizeA = 0;	
+			SizeList eventsA;			
 			std::unique_ptr<HistoryRepa> hrr;
 			std::unique_ptr<HistorySparseArray> haa;
 			SizeSet qqr;
@@ -566,7 +567,7 @@ bool Alignment::Active::induce(const ActiveInduceParameters& pp)
 				{
 					varA = this->var;
 					auto& setEventsA = this->slicesSetEvent[sliceA];
-					SizeList eventsA(setEventsA.begin(),setEventsA.end());			
+					eventsA.insert(eventsA.end(),setEventsA.begin(),setEventsA.end());
 					if (ok && llr.size())
 					{
 						auto& qqx = this->induceVarExlusions;					
@@ -1250,8 +1251,30 @@ bool Alignment::Active::induce(const ActiveInduceParameters& pp)
 					for (auto s : sl)
 						cv[s] = sliceA;
 				}
-				
 				// update historySparse and slicesSetEvent
+				if (ok)
+				{
+					if (v)
+					{
+						auto z = hr->size;
+						auto hrr = std::make_unique<HistoryRepa>();
+						hrr->dimension = 1;
+						hrr->vectorVar = new std::size_t[1];
+						hrr->vectorVar[0] = v;
+						hrr->shape = new std::size_t[1];
+						hrr->shape[0] = 2;
+						hrr->size = z;
+						hrr->evient = hr->evient;
+						hrr->arr = new unsigned char[z];
+						auto rrr = hrr->arr;		
+						for (std::size_t j = 0; j < z; j++)
+							rrr[j] = 1;
+						hr = hrjoin(HistoryRepaPtrList{std::move(hr),std::move(hrr)});
+					}
+					hr = hrhrred(sl.size(), sl.data(), *frmul(pp.tint, *hr, *fr));
+					// update the history for each event TODO
+					// cf systemsHistoryRepasApplicationsHistoryHistoryPartitionedRepa_u
+				}
 				// tidy slicesInduce and sliceFailsSize
 				// tidy new events
 				
