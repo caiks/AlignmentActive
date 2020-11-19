@@ -490,6 +490,7 @@ bool Alignment::Active::update(const ActiveUpdateParameters& pp)
 
 bool Alignment::Active::induce(const ActiveInduceParameters& pp)
 {
+	auto hrred = setVarsHistoryRepasReduce_u;
 	auto hrhrred = setVarsHistoryRepasHistoryRepaReduced_u;
 	auto hrjoin = vectorHistoryRepasJoin_u;	
 	auto hrpr = setVarsHistoryRepasRed_u;
@@ -672,8 +673,9 @@ bool Alignment::Active::induce(const ActiveInduceParameters& pp)
 			bool fail = false;
 			std::unique_ptr<HistoryRepa> hr;
 			std::unique_ptr<FudRepa> fr;
+			std::size_t frSize = 0;
 			SizeList kk;
-			// induce while unlocked
+			// induce model while unlocked
 			if (ok)
 			{
 				auto mark = (ok && this->logging) ? clk::now() : std::chrono::time_point<clk>();
@@ -1015,11 +1017,11 @@ bool Alignment::Active::induce(const ActiveInduceParameters& pp)
 								SizeUSet kk1(kk.begin(), kk.end());
 								SizeUSet vv1(vv.begin(), vv.end());
 								fr = llfr(vv1, *frdep(*fr, kk1));
+								frSize = fudRepasSize(*fr);
 								algn = mm->back().first;
 								auto m = kk.size();
 								auto z = hr->size;
 								diagonal = 100.0*(exp(algn/z/(m-1))-1.0);
-								// EVAL(fudRepasSize(*fr));
 								// EVAL(frvars(*fr)->size());
 								// EVAL(frder(*fr)->size());
 								// EVAL(frund(*fr)->size());
@@ -1036,7 +1038,7 @@ bool Alignment::Active::induce(const ActiveInduceParameters& pp)
 						{
 							if (!fail)
 							{
-								LOG "induce model\tder vars algn density: " << algn << "\timpl bi-valency percent: " << diagonal << "\tder vars cardinality: " << kk.size() UNLOG							
+								LOG "induce model\tder vars algn density: " << algn << "\timpl bi-valency percent: " << diagonal << "\tder vars cardinality: " << kk.size() << "\tfud cardinality: " << frSize UNLOG							
 							}
 							else
 							{
@@ -1050,7 +1052,7 @@ bool Alignment::Active::induce(const ActiveInduceParameters& pp)
 					LOG "induce model\ttime " << ((sec)(clk::now() - mark)).count() << "s" UNLOG
 				}				
 			}
-			// add new fud to locked active
+			// add new fud to locked active and update
 			if (ok && !fail)	
 			{
 				auto mark = (ok && this->logging) ? clk::now() : std::chrono::time_point<clk>();
@@ -1068,7 +1070,6 @@ bool Alignment::Active::induce(const ActiveInduceParameters& pp)
 				// remap kk and fr with block ids
 				if (ok)
 				{
-					auto frSize = fudRepasSize(*fr);
 					if (frSize > (1 << this->bits))
 					{
 						ok = false;
@@ -1090,116 +1091,182 @@ bool Alignment::Active::induce(const ActiveInduceParameters& pp)
 						kk[i] = nn[kk[i]];
 					EVAL(kk);
 					EVAL(sorted(*frvars(*fr)));			
+				}				
+				std::size_t v = 0;
+				SizeList sl;
+				// create the slices
+				if (ok)
+				{		
+					if (!this->decomp)
+						this->decomp = std::make_shared<DecompFudSlicedRepa>();
+					if (sliceA)
+					{
+						auto& mm = this->decomp->mapVarParent();
+						auto it = mm.find(sliceA);
+						if (it != mm.end())
+							v = it->second;
+						else
+						{
+							ok = false;
+							LOG "induce update\terror: cannot find parent slice of slice " << sliceA UNLOG
+							break;							
+						}
+					}
+					auto m = kk.size();
+					auto ar = hrred(1.0, m, kk.data(), *frmul(pp.tint, *hr, *fr));
+					std::size_t sz = 1;
+					auto skk = ar->shape;
+					auto rr0 = ar->arr;
+					for (std::size_t i = 0; i < m; i++)
+						sz *= skk[i];
+					sl.reserve(sz);
+					fr->layers.push_back(TransformRepaPtrList());
+					auto& ll = fr->layers.back();
+					ll.reserve(sz);					
+					if (sz > (1 << this->bits))
+					{
+						ok = false;
+						LOG "induce\terror: block too small" << "\tslice size: " << sz << "\tblock: " << (1 << this->bits) UNLOG
+						break;								
+					}
+					if (((this->varSlice + sz) >> this->bits) > (this->varSlice >> this->bits))
+						this->varSlice = this->system->next(this->bits);					
+					bool remainder = false;
+					for (std::size_t i = 0; i < sz; i++)
+					{
+						if (rr0[i] <= 0.0)
+						{
+							remainder = true;
+							continue;
+						}
+						auto tr = std::make_shared<TransformRepa>();
+						if (v)
+						{
+							tr->dimension = m + 1;
+							tr->vectorVar = new std::size_t[m + 1];
+							auto ww = tr->vectorVar;
+							tr->shape = new std::size_t[m + 1];
+							auto sh = tr->shape;
+							ww[0] = v;
+							sh[0] = 2;
+							for (std::size_t j = 0; j < m; j++)
+							{
+								ww[j + 1] = kk[j];
+								sh[j + 1] = skk[j];
+							}
+							tr->arr = new unsigned char[2 * sz];
+							auto rr = tr->arr;
+							for (std::size_t j = 0; j < 2 * sz; j++)
+								rr[j] = 0;
+							rr[sz + i] = 1;
+						}
+						else
+						{
+							tr->dimension = m;
+							tr->vectorVar = new std::size_t[m];
+							auto ww = tr->vectorVar;
+							tr->shape = new std::size_t[m];
+							auto sh = tr->shape;
+							for (std::size_t j = 0; j < m; j++)
+							{
+								ww[j] = kk[j];
+								sh[j] = skk[j];
+							}
+							tr->arr = new unsigned char[sz];
+							auto rr = tr->arr;
+							for (std::size_t j = 0; j < sz; j++)
+								rr[j] = 0;
+							rr[i] = 1;
+						}
+						tr->valency = 2;						
+						auto w = this->varSlice;
+						this->varSlice++;
+						tr->derived = w;
+						sl.push_back(w);
+						ll.push_back(tr);
+					}
+					if (remainder)
+					{
+						auto tr = std::make_shared<TransformRepa>();
+						if (v)
+						{
+							tr->dimension = m + 1;
+							tr->vectorVar = new std::size_t[m + 1];
+							auto ww = tr->vectorVar;
+							tr->shape = new std::size_t[m + 1];
+							auto sh = tr->shape;
+							ww[0] = v;
+							sh[0] = 2;
+							for (std::size_t j = 0; j < m; j++)
+							{
+								ww[j + 1] = kk[j];
+								sh[j + 1] = skk[j];
+							}
+							tr->arr = new unsigned char[2 * sz];
+							auto rr = tr->arr;
+							for (std::size_t j = 0; j < 2 * sz; j++)
+								rr[j] = j >= sz && rr0[j - sz] <= 0.0 ? 1 : 0;
+						}
+						else
+						{
+							tr->dimension = m;
+							tr->vectorVar = new std::size_t[m];
+							auto ww = tr->vectorVar;
+							tr->shape = new std::size_t[m];
+							auto sh = tr->shape;
+							for (std::size_t j = 0; j < m; j++)
+							{
+								ww[j] = kk[j];
+								sh[j] = skk[j];
+							}
+							tr->arr = new unsigned char[sz];
+							auto rr = tr->arr;
+							for (std::size_t j = 0; j < sz; j++)
+								rr[j] = rr0[j] <= 0.0 ? 1 : 0;
+						}
+						tr->valency = 2;
+						auto w = this->varSlice;
+						this->varSlice++;
+						tr->derived = w;
+						sl.push_back(w);
+						ll.push_back(tr);
+					}
 				}
-					
-				
-				// auto dr = std::make_unique<ApplicationRepa>();
-				// {
-					// dr->substrate = vv;
-					// dr->fud = std::make_shared<FudRepa>();
-					// dr->slices = std::make_shared<SizeTree>();	
-					// auto vd = std::make_shared<Variable>(d);
-					// auto vl = std::make_shared<Variable>("s");
-					// auto vf = std::make_shared<Variable>((int)f);
-					// auto vdf = std::make_shared<Variable>(vd, vf);
-					// auto vfl = std::make_shared<Variable>(vdf, vl);
-					// SizeUSet kk1(kk.begin(), kk.end());
-					// SizeUSet vv1(vv.begin(), vv.end());
-					// auto gr = llfr(vv1, *frdep(*fr, kk1));
-					// auto ar = hrred(1.0, m, kk.data(), *frmul(tint, *hr, *gr));
-					// SizeList sl;
-					// TransformRepaPtrList ll;
-					// std::size_t sz = 1;
-					// auto skk = ar->shape;
-					// auto rr0 = ar->arr;
-					// for (std::size_t i = 0; i < m; i++)
-						// sz *= skk[i];
-					// sl.reserve(sz);
-					// ll.reserve(sz);
-					// bool remainder = false;
-					// std::size_t b = 1;
-					// auto& llu = ur->listVarSizePair;
-					// for (std::size_t i = 0; i < sz; i++)
-					// {
-						// if (rr0[i] <= 0.0)
-						// {
-							// remainder = true;
-							// continue;
-						// }
-						// auto tr = std::make_shared<TransformRepa>();
-						// tr->dimension = m;
-						// tr->vectorVar = new std::size_t[m];
-						// auto ww = tr->vectorVar;
-						// tr->shape = new std::size_t[m];
-						// auto sh = tr->shape;
-						// for (std::size_t j = 0; j < m; j++)
-						// {
-							// ww[j] = kk[j];
-							// sh[j] = skk[j];
-						// }
-						// tr->arr = new unsigned char[sz];
-						// auto rr = tr->arr;
-						// for (std::size_t j = 0; j < sz; j++)
-							// rr[j] = 0;
-						// rr[i] = 1;
-						// tr->valency = 2;
-						// auto vb = std::make_shared<Variable>((int)b++);
-						// auto vflb = std::make_shared<Variable>(vfl, vb);
-						// llu.push_back(VarSizePair(vflb, 2));
-						// auto w = llu.size() - 1;
-						// tr->derived = w;
-						// sl.push_back(w);
-						// ll.push_back(tr);
-					// }
-					// if (remainder)
-					// {
-						// auto tr = std::make_shared<TransformRepa>();
-						// tr->dimension = m;
-						// tr->vectorVar = new std::size_t[m];
-						// auto ww = tr->vectorVar;
-						// tr->shape = new std::size_t[m];
-						// auto sh = tr->shape;
-						// for (std::size_t j = 0; j < m; j++)
-						// {
-							// ww[j] = kk[j];
-							// sh[j] = skk[j];
-						// }
-						// tr->arr = new unsigned char[sz];
-						// auto rr = tr->arr;
-						// for (std::size_t j = 0; j < sz; j++)
-							// rr[j] = rr0[j] <= 0.0 ? 1 : 0;
-						// tr->valency = 2;
-						// auto vb = std::make_shared<Variable>((int)b++);
-						// auto vflb = std::make_shared<Variable>(vfl, vb);
-						// llu.push_back(VarSizePair(vflb, 2));
-						// auto w = llu.size() - 1;
-						// tr->derived = w;
-						// sl.push_back(w);
-						// ll.push_back(tr);
-					// }
-					// dr->fud->layers.insert(dr->fud->layers.end(), gr->layers.begin(), gr->layers.end());
-					// dr->fud->layers.push_back(ll);
-					// dr->slices->_list.reserve(sz);
-					// for (auto& s : sl)
-						// dr->slices->_list.push_back(SizeSizeTreePair(s, std::make_shared<SizeTree>()));			
-				// }
-							
 				// update this decomp mapVarParent and mapVarInt
+				if (ok)
+				{
+					auto& dr = *this->decomp;
+					dr.fuds.push_back(FudSlicedStruct());
+					auto& fs = dr.fuds.back();
+					fs.parent = sliceA;
+					fs.children = sl;
+					fs.fud.reserve(frSize + sl.size());
+					for (auto& ii : fr->layers)
+						for (auto& tr : ii)
+							fs.fud.push_back(tr);
+					auto& vi = dr.mapVarInt();
+					vi[sliceA] = dr.fuds.size() - 1;
+					auto& cv = dr.mapVarParent();
+					for (auto s : sl)
+						cv[s] = sliceA;
+				}
+				
 				// update historySparse and slicesSetEvent
 				// tidy slicesInduce and sliceFailsSize
 				// tidy new events
 				
 				if (ok && this->logging)
 				{
-					LOG "induce update\tslice: " << sliceA << "\tslice size: " << sliceSizeA << "\trepa dimension: " << (hrr ? hrr->dimension : 0) << "\tsparse capacity: " << (haa ? haa->capacity : 0) << "\tsparse paths: " << slppa.size() << "\ttime " << ((sec)(clk::now() - mark)).count() << "s" UNLOG
+					LOG "induce update\tslice: " << sliceA << "\tparent slice: " << v << "\tchildren cardinality: " << sl.size() << "\tchildren slices: " << sl<< "\tmodel cardinality: " << this->decomp->fuds.size() << "\ttime " << ((sec)(clk::now() - mark)).count() << "s" UNLOG
 				}	
 			}
 
-			EVAL(sliceA);
-			EVAL(sliceSizeA);
+			// EVAL(sliceA);
+			// EVAL(sliceSizeA);
 			// EVAL(*hrr);
 			// EVAL(*haa);
-			EVAL(slppa.size());
+			// EVAL(slppa.size());
+			if (this->decomp) { EVAL(*this->decomp);}
 			ok = false;
 			
 
