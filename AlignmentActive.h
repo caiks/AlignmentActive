@@ -76,22 +76,17 @@ namespace Alignment
 		
 		std::mutex mutex;
 		
-		std::shared_ptr<ActiveSystem> system;
-
-		int bits;
-		std::size_t var;
-		std::size_t varSlice;
-		
 		std::vector<ActiveEventsRepaPtr> underlyingEventsRepa;
-		HistoryRepaPtrList underlyingHistoryRepa;
 		std::vector<ActiveEventsArrayPtr> underlyingEventsSparse;
-		HistorySparseArrayPtrList underlyingHistorySparse;
-		SizeSet eventsUpdated;
+		SizeSet underlyingEventUpdateds;
+		
+		std::size_t historySize;
 		bool historyOverflow;
 		std::size_t historyEvent;
-		std::size_t historySize;
-		std::map<std::size_t,HistorySparseArrayPtr> slicesPath;
-		std::size_t pathLenMax;
+		
+		HistoryRepaPtrList underlyingHistoryRepa;
+		HistorySparseArrayPtrList underlyingHistorySparse;
+		SizeSizeUMap underlyingSlicesParent;
 
 		std::shared_ptr<DecompFudSlicedRepa> decomp;
 		
@@ -99,6 +94,12 @@ namespace Alignment
 		SizeSizeSetMap historySlicesSetEvent;
 		
 		ActiveEventsArrayPtr eventsSparse;
+		
+		std::shared_ptr<ActiveSystem> system;
+		
+		int bits;
+		std::size_t var;
+		std::size_t varSlice;
 		
 		std::size_t induceThreshold;
 		SizeSet induceSlices;

@@ -92,7 +92,7 @@ std::ostream& operator<<(std::ostream& out, const ActiveEventsArray& ev)
 	return out;
 }
 
-Active::Active() : terminate(false), log(log_default), historyOverflow(false), historyEvent(0), historySize(0), bits(16), var(0), varSlice(0), induceThreshold(100), logging(false), pathLenMax(1), updateCallback(0)
+Active::Active() : terminate(false), log(log_default), historyOverflow(false), historyEvent(0), historySize(0), bits(16), var(0), varSlice(0), induceThreshold(100), logging(false),  updateCallback(0)
 {
 }
 
@@ -138,7 +138,7 @@ bool Alignment::Active::update(ActiveUpdateParameters pp)
 					}	
 				}
 				// find set of intersecting event ids
-				SizeSet eventsUpdatedA(this->eventsUpdated);
+				SizeSet eventsUpdatedA(this->underlyingEventUpdateds);
 				if (ok)
 				{
 					bool eventsFirst = true;
@@ -314,12 +314,10 @@ bool Alignment::Active::update(ActiveUpdateParameters pp)
 								break;
 							}
 						rr[j] = v;
-						if (v && this->slicesPath.find(v) == this->slicesPath.end())
-						{
-							this->slicesPath[v] = hr1;
-							if (n > this->pathLenMax)
-								this->pathLenMax = n;
-						}
+						if (v && this->underlyingSlicesParent.find(v) == this->underlyingSlicesParent.end())
+							for (int i = n-1; i > 0; i--)
+								if (rr1[i])
+									this->underlyingSlicesParent[rr1[i]] = rr1[i-1];
 					}
 				}
 				if (ok)
@@ -407,7 +405,7 @@ bool Alignment::Active::update(ActiveUpdateParameters pp)
 					}
 					for (auto eventB : eventsA)
 						if (eventB <= eventA)
-							this->eventsUpdated.insert(eventB);
+							this->underlyingEventUpdateds.insert(eventB);
 				}
 				// unreference underlying up to update event
 				std::size_t eventLeast = eventA;
@@ -458,18 +456,18 @@ bool Alignment::Active::update(ActiveUpdateParameters pp)
 							ev->mapIdEvent.erase(eventB);
 					}
 				}
-				// remove all but last eventsUpdated before the first event of any underlying
+				// remove all but last underlyingEventUpdateds before the first event of any underlying
 				if (ok)
 				{
-					if (this->eventsUpdated.size())
+					if (this->underlyingEventUpdateds.size())
 					{
 						SizeSet eventsB;
-						for (auto eventB : this->eventsUpdated)
+						for (auto eventB : this->underlyingEventUpdateds)
 							if (eventB < eventLeast)
 								eventsB.insert(eventB);	
-						eventsB.erase(*this->eventsUpdated.rbegin());
+						eventsB.erase(*this->underlyingEventUpdateds.rbegin());
 						for (auto eventB : eventsB)
-							this->eventsUpdated.erase(eventB);							
+							this->underlyingEventUpdateds.erase(eventB);							
 					}
 				}	
 			}
@@ -520,8 +518,7 @@ bool Alignment::Active::induce(ActiveInduceParameters pp, ActiveUpdateParameters
 			std::unique_ptr<HistoryRepa> hrr;
 			std::unique_ptr<HistorySparseArray> haa;
 			SizeSet qqr;
-			std::unordered_map<std::size_t,HistorySparseArrayPtr> slppa;
-			std::size_t slppalen = 0;		
+			SizeSizeUMap slppa;
 			// copy repa and sparse from locked active
 			if (ok)
 			{			
@@ -629,14 +626,13 @@ bool Alignment::Active::induce(ActiveInduceParameters pp, ActiveUpdateParameters
 						auto za = eventsA.size(); 
 						auto na = lla.size();
 						auto ev = eventsA.data();
-						auto& slpp = this->slicesPath;
+						auto& slpp = this->underlyingSlicesParent;
 						haa = std::make_unique<HistorySparseArray>();
 						haa->size = za;
 						haa->capacity = na;
 						haa->arr = new std::size_t[za*na];
 						auto raa = haa->arr;
 						slppa.reserve(za*na);
-						slppalen = this->pathLenMax;
 						for (std::size_t i = 0; i < na; i++)
 						{
 							auto& hr = lla[i];
@@ -648,11 +644,15 @@ bool Alignment::Active::induce(ActiveInduceParameters pp, ActiveUpdateParameters
 								if (v)
 								{
 									auto it = slpp.find(v);
-									if (it != slpp.end())
+									while (it != slpp.end())
+									{
 										slppa.insert_or_assign(it->first, it->second);
+										it = slpp.find(it->second);
+									}
 								}
 							}
 						}
+						// EVAL(sorted(slppa));
 					}
 				}
 				if (ok && this->logging)
@@ -689,40 +689,29 @@ bool Alignment::Active::induce(ActiveInduceParameters pp, ActiveUpdateParameters
 					auto za = haa->size; 
 					auto na = haa->capacity; 
 					auto raa = haa->arr;
-					qqa.reserve((slppalen > 0 ? slppalen : 1) * za * na * 3);
-					mma.reserve((slppalen > 0 ? slppalen : 1) * za * na * 3);
+					qqa.reserve(slppa.size());
+					mma.reserve(slppa.size());
 					for (std::size_t k = 0; k < na; k++)
 					{
 						for (std::size_t j = 0; j < za; j++)
 						{
 							auto v = raa[j*na + k];
+							SizeList ll {v};
+							qqa[v]++;
 							auto it = slppa.find(v);
-							if (it != slppa.end())
+							while (it != slppa.end())
 							{
-								auto& hr1 = it->second;
-								auto n1 = hr1->capacity;
-								auto rr1 = hr1->arr;
-								for (std::size_t i = 0; i < n1; i++)
-								{
-									auto w = rr1[i];
-									if (w)
-									{
-										qqa[w]++;
-										for (std::size_t m = i+1; m < n1; m++)
-										{
-											auto x = rr1[m];
-											if (x)
-												mma[w].insert(x);
-										}
-									}									
-								}
-							}
-							else
-							{
-								qqa[v]++;
-							}
+								ll.push_back(it->second);
+								qqa[it->second]++;
+								it = slppa.find(it->second);
+							}								
+							for (int i = ll.size() - 1; i > 0; i--)
+								for (int m = i-1; m >= 0; m--)
+									mma[ll[i]].insert(ll[m]);
 						}
 					}
+					// EVAL(sorted(qqa));
+					// EVAL(sorted(mma));
 				}
 				// get top nmax vars by entropy
 				// remove any sparse parents with same entropy as children
@@ -904,28 +893,18 @@ bool Alignment::Active::induce(ActiveInduceParameters pp, ActiveUpdateParameters
 										auto v = raa[j*na + i];
 										if (v)
 										{
-											auto iv = slppa.find(v);
-											if (iv != slppa.end())
-											{
-												auto& hr1 = iv->second;
-												auto nr1 = hr1->capacity;
-												auto rr1 = hr1->arr;
-												for (std::size_t k = 0; k < nr1; k++)
-												{
-													auto w = rr1[k];
-													if (w)
-													{
-														auto iw = mvv.find(w);
-														if (iw != mvv.end())
-															rra[iw->second * za + j] = 1;
-													}
-												}
-											}
-											else
 											{
 												auto iw = mvv.find(v);
 												if (iw != mvv.end())
 													rra[iw->second * za + j] = 1;
+											}
+											auto iv = slppa.find(v);
+											while (iv != slppa.end())
+											{
+												auto iw = mvv.find(iv->second);
+												if (iw != mvv.end())
+													rra[iw->second * za + j] = 1;
+												iv = slppa.find(iv->second);
 											}
 										}								
 									}
@@ -933,28 +912,18 @@ bool Alignment::Active::induce(ActiveInduceParameters pp, ActiveUpdateParameters
 										auto v = ras[j*na + i];
 										if (v)
 										{
-											auto iv = slppa.find(v);
-											if (iv != slppa.end())
-											{
-												auto& hr1 = iv->second;
-												auto nr1 = hr1->capacity;
-												auto rr1 = hr1->arr;
-												for (std::size_t k = 0; k < nr1; k++)
-												{
-													auto w = rr1[k];
-													if (w)
-													{
-														auto iw = mvv.find(w);
-														if (iw != mvv.end())
-															rras[iw->second * za + j] = 1;
-													}
-												}
-											}
-											else
 											{
 												auto iw = mvv.find(v);
 												if (iw != mvv.end())
 													rras[iw->second * za + j] = 1;
+											}
+											auto iv = slppa.find(v);
+											while (iv != slppa.end())
+											{
+												auto iw = mvv.find(iv->second);
+												if (iw != mvv.end())
+													rras[iw->second * za + j] = 1;
+												iv = slppa.find(iv->second);
 											}
 										}								
 									}
