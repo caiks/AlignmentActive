@@ -1009,7 +1009,7 @@ bool Alignment::Active::induce(ActiveInduceParameters pp, ActiveUpdateParameters
 								for (std::size_t i = 0; i < n; i++)
 									vv.push_back(vv1[i]);
 							}
-							auto t = layerer(pp.wmax, pp.lmax, pp.xmax, pp.omax, pp.bmax, pp.mmax, pp.umax, pp.pmax, pp.tint, vv, *hr, *hrs, this->log, this->logging, varA);
+							auto t = layerer(pp.wmax, pp.lmax, pp.xmax, pp.omax, pp.bmax, pp.mmax, pp.umax, pp.pmax, pp.tint, vv, *hr, *hrs, this->log, this->logging && pp.logging, varA);
 							fr = std::move(std::get<0>(t));
 							auto mm = std::move(std::get<1>(t));
 							fail = !fr || (!mm || !mm->size());

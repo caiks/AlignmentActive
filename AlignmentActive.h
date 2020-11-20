@@ -63,6 +63,7 @@ namespace Alignment
 		size_t pmax = 1;
 		size_t mult = 1;
 		size_t seed = 5;
+		bool logging = false;
 	};
 	
 	struct Active
