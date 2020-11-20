@@ -68,7 +68,9 @@ namespace Alignment
 	
 	struct Active
 	{
-		Active();
+		Active(std::string nameA = "");
+		
+		std::string name;
 		
 		bool terminate;
 		void (*log)(const std::string&);
@@ -111,7 +113,7 @@ namespace Alignment
 
 		bool induce(ActiveInduceParameters pp = ActiveInduceParameters(),
 					ActiveUpdateParameters ppu = ActiveUpdateParameters());
-		
+		bool (*induceCallback)(std::size_t sliceA, std::size_t sliceSizeA);		
 	};
 }
 

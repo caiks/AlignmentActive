@@ -92,12 +92,12 @@ std::ostream& operator<<(std::ostream& out, const ActiveEventsArray& ev)
 	return out;
 }
 
-Active::Active() : terminate(false), log(log_default), historyOverflow(false), historyEvent(0), historySize(0), bits(16), var(0), varSlice(0), induceThreshold(100), logging(false),  updateCallback(0)
+Active::Active(std::string nameA) : name(nameA),terminate(false), log(log_default), historyOverflow(false), historyEvent(0), historySize(0), bits(16), var(0), varSlice(0), induceThreshold(100), logging(false), updateCallback(0),  induceCallback(0)
 {
 }
 
 #define UNLOG ; log_str.flush(); this->log(log_str.str());}
-#define LOG { std::ostringstream log_str; log_str <<
+#define LOG { std::ostringstream log_str; log_str << (this->name.size() ? this->name + "\t" : "") <<
 
 // event ids should be monotonic and updated no more than once
 bool Alignment::Active::update(ActiveUpdateParameters pp)
@@ -105,11 +105,9 @@ bool Alignment::Active::update(ActiveUpdateParameters pp)
 	auto drmul = historyRepaPtrListsHistorySparseArrayPtrListsDecompFudSlicedRepasEventsPathSlice_u;
 
 	bool ok = true;
-	if (this->terminate)
-		return true;
 	try 
 	{
-		while (ok)
+		while (ok && !this->terminate)
 		{
 			SizeSet eventsA;
 			std::size_t eventA = 0;
@@ -505,11 +503,9 @@ bool Alignment::Active::induce(ActiveInduceParameters pp, ActiveUpdateParameters
 	auto layerer = parametersLayererMaxRollByMExcludedSelfHighestLogIORepa_up;
 		
 	bool ok = true;
-	if (this->terminate)
-		return true;
 	try 
 	{
-		while (ok)
+		while (ok && !this->terminate)
 		{
 			std::size_t varA = 0;
 			std::size_t sliceA = 0;
@@ -1308,8 +1304,12 @@ bool Alignment::Active::induce(ActiveInduceParameters pp, ActiveUpdateParameters
 				}
 				if (ok && this->logging)
 				{
-					LOG "induce update\tslice: " << sliceA << "\tparent slice: " << v << "\tchildren cardinality: " << sl.size() << "\tchildren slices: " << sl<< "\tmodel cardinality: " << this->decomp->fuds.size() << "\ttime " << ((sec)(clk::now() - mark)).count() << "s" UNLOG
+					LOG "induce update\tslice: " << sliceA << "\tparent slice: " << v << "\tchildren cardinality: " << sl.size() << "\tchildren slices: " << sl << "\tmodel cardinality: " << this->decomp->fuds.size() << "\ttime " << ((sec)(clk::now() - mark)).count() << "s" UNLOG
 				}	
+				if (ok && induceCallback)
+				{
+					ok = ok && induceCallback(sliceA,sliceSizeA);
+				}
 			}
 			if (ok && fail)
 			{
@@ -1325,7 +1325,6 @@ bool Alignment::Active::induce(ActiveInduceParameters pp, ActiveUpdateParameters
 			// EVAL(sliceSizeA);
 			// EVAL(*hrr);
 			// EVAL(*haa);
-			// EVAL(slppa.size());
 			// if (this->decomp) { EVAL(*this->decomp);}
 			// ok = false;
 		}
