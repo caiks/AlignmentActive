@@ -100,7 +100,7 @@ Active::Active() : terminate(false), log(log_default), historyOverflow(false), h
 #define LOG { std::ostringstream log_str; log_str <<
 
 // event ids should be monotonic and updated no more than once
-bool Alignment::Active::update(const ActiveUpdateParameters& pp)
+bool Alignment::Active::update(ActiveUpdateParameters pp)
 {
 	auto drmul = historyRepaPtrListsHistorySparseArrayPtrListsDecompFudSlicedRepasEventsPathSlice_u;
 
@@ -353,22 +353,22 @@ bool Alignment::Active::update(const ActiveUpdateParameters& pp)
 							hr.size = z;
 							hr.capacity = 1;
 							hr.arr = new std::size_t[z];
-							memset(hr.arr, 0, z*sizeof(std::size_t));
+							// memset(hr.arr, 0, z*sizeof(std::size_t));
 						}
 						std::size_t sliceB = this->historySparse.arr[this->historyEvent];
 						if (!sliceA || sliceA != sliceB)
 						{
 							this->historySparse.arr[this->historyEvent] = sliceA;
-							auto& setA = this->slicesSetEvent[sliceA];
+							auto& setA = this->historySlicesSetEvent[sliceA];
 							setA.insert(this->historyEvent);
 							if (this->induceThreshold && setA.size() == this->induceThreshold)
-								this->slicesInduce.insert(sliceA);
+								this->induceSlices.insert(sliceA);
 							if (sliceA)
 							{
-								auto& setB = this->slicesSetEvent[sliceB];
+								auto& setB = this->historySlicesSetEvent[sliceB];
 								setB.erase(this->historyEvent);
 								if (this->induceThreshold && setB.size() == this->induceThreshold-1)
-									this->slicesInduce.erase(sliceB);
+									this->induceSlices.erase(sliceB);
 							}
 						}					
 					}
@@ -392,7 +392,7 @@ bool Alignment::Active::update(const ActiveUpdateParameters& pp)
 					}
 					if (ok && this->logging)
 					{
-						LOG "update apply\tevent id: " << eventA << "\thistory id: " << this->historyEvent << "\tslice: " << sliceA << "\tslice size: " << this->slicesSetEvent[sliceA].size() << "\ttime " << ((sec)(clk::now() - mark)).count() << "s" UNLOG
+						LOG "update apply\tevent id: " << eventA << "\thistory id: " << this->historyEvent << "\tslice: " << sliceA << "\tslice size: " << this->historySlicesSetEvent[sliceA].size() << "\ttime " << ((sec)(clk::now() - mark)).count() << "s" UNLOG
 					}
 				}
 				// increment historyEvent
@@ -488,7 +488,7 @@ bool Alignment::Active::update(const ActiveUpdateParameters& pp)
 	return ok;
 }
 
-bool Alignment::Active::induce(const ActiveInduceParameters& pp)
+bool Alignment::Active::induce(ActiveInduceParameters pp, ActiveUpdateParameters ppu)
 {
 	auto hrred = setVarsHistoryRepasReduce_u;
 	auto hrhrred = setVarsHistoryRepasHistoryRepaReduced_u;
@@ -503,6 +503,7 @@ bool Alignment::Active::induce(const ActiveInduceParameters& pp)
 	auto llfr = setVariablesListTransformRepasFudRepa_u;
 	auto frmul = historyRepasFudRepasMultiply_up;
 	auto frdep = fudRepasSetVarsDepends;
+	auto drmul = historyRepaPtrListsHistorySparseArrayPtrListsDecompFudSlicedRepasEventsPathSlice_u;
 	auto layerer = parametersLayererMaxRollByMExcludedSelfHighestLogIORepa_up;
 		
 	bool ok = true;
@@ -545,13 +546,13 @@ bool Alignment::Active::induce(const ActiveInduceParameters& pp)
 				// get largest slice
 				if (ok)
 				{
-					for (auto sliceB : this->slicesInduce)
+					for (auto sliceB : this->induceSlices)
 					{
-						auto sliceSizeB = this->slicesSetEvent[sliceB].size();
+						auto sliceSizeB = this->historySlicesSetEvent[sliceB].size();
 						if (sliceSizeB > sliceSizeA)
 						{
-							auto it = this->sliceFailsSize.find(sliceB);
-							if (it == this->sliceFailsSize.end() || it->second < sliceSizeB)
+							auto it = this->induceSliceFailsSize.find(sliceB);
+							if (it == this->induceSliceFailsSize.end() || it->second < sliceSizeB)
 							{
 								sliceA = sliceB;
 								sliceSizeA = sliceSizeB;							
@@ -566,7 +567,7 @@ bool Alignment::Active::induce(const ActiveInduceParameters& pp)
 				if (ok)
 				{
 					varA = this->var;
-					auto& setEventsA = this->slicesSetEvent[sliceA];
+					auto& setEventsA = this->historySlicesSetEvent[sliceA];
 					eventsA.insert(eventsA.end(),setEventsA.begin(),setEventsA.end());
 					if (ok && llr.size())
 					{
@@ -1090,8 +1091,8 @@ bool Alignment::Active::induce(const ActiveInduceParameters& pp)
 					fr->reframe_u(nn);
 					for (std::size_t i = 0; i < kk.size(); i++)	
 						kk[i] = nn[kk[i]];
-					EVAL(kk);
-					EVAL(sorted(*frvars(*fr)));			
+					// EVAL(kk);
+					// EVAL(sorted(*frvars(*fr)));			
 				}				
 				std::size_t v = 0;
 				SizeList sl;
@@ -1251,7 +1252,7 @@ bool Alignment::Active::induce(const ActiveInduceParameters& pp)
 					for (auto s : sl)
 						cv[s] = sliceA;
 				}
-				// update historySparse and slicesSetEvent
+				// update historySparse and historySlicesSetEvent
 				if (ok)
 				{
 					if (v)
@@ -1272,27 +1273,92 @@ bool Alignment::Active::induce(const ActiveInduceParameters& pp)
 						hr = hrjoin(HistoryRepaPtrList{std::move(hr),std::move(hrr)});
 					}
 					hr = hrhrred(sl.size(), sl.data(), *frmul(pp.tint, *hr, *fr));
-					// update the history for each event TODO
-					// cf systemsHistoryRepasApplicationsHistoryHistoryPartitionedRepa_u
+					auto n = hr->dimension;
+					auto vv = hr->vectorVar;
+					auto z = hr->size;
+					auto rr = hr->arr;	
+					auto ev = eventsA.data();
+					SizeSet slices;
+					for (std::size_t j = 0; j < z; j++)
+						for (std::size_t i = 0; i < n; i++)
+						{
+							auto u = rr[i*z + j];
+							if (u)
+							{
+								auto sliceB = vv[i];
+								auto eventA = ev[j];
+								this->historySparse.arr[eventA] = sliceB;
+								this->historySlicesSetEvent[sliceA].erase(eventA);
+								this->historySlicesSetEvent[sliceB].insert(eventA);
+								slices.insert(sliceB);
+								break;
+							}
+						}
+					for (auto sliceB : slices)
+						if (this->historySlicesSetEvent[sliceB].size() >= induceThreshold)
+							this->induceSlices.insert(sliceB);
+					this->induceSlices.erase(sliceA);
+					this->induceSliceFailsSize.erase(sliceA);
 				}
-				// tidy slicesInduce and sliceFailsSize
 				// tidy new events
-				
+				if (ok)
+				{
+					auto eventsB = this->historySlicesSetEvent[sliceA];
+					if (eventsB.size())
+					{
+						SizeSet slices;
+						for (auto eventB : eventsB)
+						{
+							auto ll = drmul(this->underlyingHistoryRepa,this->underlyingHistorySparse,*this->decomp,eventB,ppu.mapCapacity);	
+							ok = ok && ll;
+							if (!ok)
+							{
+								LOG "induce update\terror: drmul failed to return a list" UNLOG
+								break;
+							}	
+							std::size_t	sliceB = 0;						
+							if (ll->size())
+								sliceB = ll->back();
+							ok = ok && this->historySparse.arr;
+							if (!ok)
+							{
+								LOG "induce update\terror: historySparse not initialised" UNLOG
+								break;
+							}
+							this->historySparse.arr[eventB] = sliceB;
+							this->historySlicesSetEvent[sliceB].insert(eventB);	
+							slices.insert(sliceB);							
+						}
+						if (!ok)
+							break;
+						for (auto sliceB : slices)
+							if (this->historySlicesSetEvent[sliceB].size() >= induceThreshold)
+								this->induceSlices.insert(sliceB);
+					}
+					this->historySlicesSetEvent.erase(sliceA);
+				}
 				if (ok && this->logging)
 				{
 					LOG "induce update\tslice: " << sliceA << "\tparent slice: " << v << "\tchildren cardinality: " << sl.size() << "\tchildren slices: " << sl<< "\tmodel cardinality: " << this->decomp->fuds.size() << "\ttime " << ((sec)(clk::now() - mark)).count() << "s" UNLOG
 				}	
 			}
-
+			if (ok && fail)
+			{
+				auto mark = (ok && this->logging) ? clk::now() : std::chrono::time_point<clk>();
+				std::lock_guard<std::mutex> guard(this->mutex);		
+				this->induceSliceFailsSize.insert_or_assign(sliceA, sliceSizeA);
+				if (ok && this->logging)
+				{
+					LOG "induce update fail\tslice: " << sliceA << "\tslice size: " << sliceSizeA  << "\ttime " << ((sec)(clk::now() - mark)).count() << "s" UNLOG
+				}					
+			}
 			// EVAL(sliceA);
 			// EVAL(sliceSizeA);
 			// EVAL(*hrr);
 			// EVAL(*haa);
 			// EVAL(slppa.size());
-			if (this->decomp) { EVAL(*this->decomp);}
-			ok = false;
-			
-
+			// if (this->decomp) { EVAL(*this->decomp);}
+			// ok = false;
 		}
 	} 
 	catch (const std::exception& e) 

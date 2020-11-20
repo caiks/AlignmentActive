@@ -95,19 +95,20 @@ namespace Alignment
 		std::shared_ptr<DecompFudSlicedRepa> decomp;
 		
 		HistorySparseArray historySparse;
-		SizeSizeSetMap slicesSetEvent;
+		SizeSizeSetMap historySlicesSetEvent;
 		
 		ActiveEventsArrayPtr eventsSparse;
 		
 		std::size_t induceThreshold;
-		SizeSet slicesInduce;
+		SizeSet induceSlices;
 		SizeSet induceVarExlusions;
-		SizeSizeMap sliceFailsSize;
+		SizeSizeMap induceSliceFailsSize;
 		
-		bool update(const ActiveUpdateParameters&);
+		bool update(ActiveUpdateParameters pp = ActiveUpdateParameters());
 		bool (*updateCallback)(const SizeSet& eventsA, std::size_t eventA, std::size_t historyEventA, std::size_t sliceA);
 
-		bool induce(const ActiveInduceParameters&);
+		bool induce(ActiveInduceParameters pp = ActiveInduceParameters(),
+					ActiveUpdateParameters ppu = ActiveUpdateParameters());
 		
 	};
 }
