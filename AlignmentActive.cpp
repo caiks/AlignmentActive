@@ -124,7 +124,7 @@ bool Alignment::Active::update(ActiveUpdateParameters pp)
 					for (auto& ev : this->underlyingEventsSparse)
 						ok = ok && ev;
 					for (auto& hr : this->underlyingHistoryRepa)
-						ok = ok && hr && hr->size == historySize && hr->dimension > 0;
+						ok = ok && hr && hr->size == historySize && hr->dimension > 0  && hr->evient;
 					for (auto& hr : this->underlyingHistorySparse)
 						ok = ok && hr && hr->size == historySize && hr->capacity == 1;
 					ok = ok && this->underlyingEventsRepa.size() == this->underlyingHistoryRepa.size();
