@@ -90,9 +90,9 @@ namespace Alignment
 		HistorySparseArrayPtrList underlyingHistorySparse;
 		SizeSizeUMap underlyingSlicesParent;
 
-		std::shared_ptr<DecompFudSlicedRepa> decomp;
+		std::unique_ptr<DecompFudSlicedRepa> decomp;
 		
-		HistorySparseArray historySparse;
+		std::unique_ptr<HistorySparseArray> historySparse;
 		SizeSizeSetMap historySlicesSetEvent;
 		
 		ActiveEventsArrayPtr eventsSparse;
@@ -121,5 +121,11 @@ std::ostream& operator<<(std::ostream& out, const Alignment::ActiveEventsRepa&);
 
 std::ostream& operator<<(std::ostream& out, const Alignment::ActiveEventsArray&);
 
+namespace Alignment
+{
+	void activesPersistent(const Active&, std::ostream&);
+
+	std::unique_ptr<Active> persistentsActive(std::istream&);
+}
 
 #endif

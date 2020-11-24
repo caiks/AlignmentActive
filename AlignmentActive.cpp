@@ -119,14 +119,15 @@ bool Alignment::Active::update(ActiveUpdateParameters pp)
 				// check consistent underlying
 				if (ok)
 				{
+					ok = ok && this->historySize > 0;
 					for (auto& ev : this->underlyingEventsRepa)
 						ok = ok && ev;
 					for (auto& ev : this->underlyingEventsSparse)
 						ok = ok && ev;
 					for (auto& hr : this->underlyingHistoryRepa)
-						ok = ok && hr && hr->size == historySize && hr->dimension > 0  && hr->evient;
+						ok = ok && hr && hr->size == this->historySize && hr->dimension > 0  && hr->evient;
 					for (auto& hr : this->underlyingHistorySparse)
-						ok = ok && hr && hr->size == historySize && hr->capacity == 1;
+						ok = ok && hr && hr->size == this->historySize && hr->capacity == 1;
 					ok = ok && this->underlyingEventsRepa.size() == this->underlyingHistoryRepa.size();
 					ok = ok && this->underlyingEventsSparse.size() == this->underlyingHistorySparse.size();
 					if (!ok)
@@ -341,20 +342,20 @@ bool Alignment::Active::update(ActiveUpdateParameters pp)
 					{
 						if (ll->size())
 							sliceA = ll->back();
-						if (this->historySparse.size != this->historySize)
+						if (!this->historySparse || this->historySparse->size != this->historySize)
 						{
+							this->historySparse = std::make_unique<HistorySparseArray>();
 							auto z = this->historySize;
 							auto& hr = this->historySparse;
-							delete[] hr.arr;
-							hr.size = z;
-							hr.capacity = 1;
-							hr.arr = new std::size_t[z];
-							// memset(hr.arr, 0, z*sizeof(std::size_t));
+							delete[] hr->arr;
+							hr->size = z;
+							hr->capacity = 1;
+							hr->arr = new std::size_t[z];
 						}
-						std::size_t sliceB = this->historySparse.arr[this->historyEvent];
+						std::size_t sliceB = this->historySparse->arr[this->historyEvent];
 						if (!sliceA || sliceA != sliceB)
 						{
-							this->historySparse.arr[this->historyEvent] = sliceA;
+							this->historySparse->arr[this->historyEvent] = sliceA;
 							auto& setA = this->historySlicesSetEvent[sliceA];
 							setA.insert(this->historyEvent);
 							if (this->induceThreshold && setA.size() == this->induceThreshold)
@@ -525,11 +526,12 @@ bool Alignment::Active::induce(ActiveInduceParameters pp, ActiveUpdateParameters
 				// check consistent underlying
 				if (ok)
 				{
+					ok = ok && this->historySize > 0;
 					ok = ok && (llr.size() || lla.size());
 					for (auto& hr : llr)
-						ok = ok && hr && hr->size == historySize && hr->dimension > 0 && hr->evient;
+						ok = ok && hr && hr->size == this->historySize && hr->dimension > 0 && hr->evient;
 					for (auto& hr : lla)
-						ok = ok && hr && hr->size == historySize && hr->capacity == 1;
+						ok = ok && hr && hr->size == this->historySize && hr->capacity == 1;
 					if (!ok)
 					{
 						LOG "induce\terror: inconsistent underlying" UNLOG
@@ -1065,7 +1067,7 @@ bool Alignment::Active::induce(ActiveInduceParameters pp, ActiveUpdateParameters
 				if (ok)
 				{		
 					if (!this->decomp)
-						this->decomp = std::make_shared<DecompFudSlicedRepa>();
+						this->decomp = std::make_unique<DecompFudSlicedRepa>();
 					if (sliceA)
 					{
 						auto& mm = this->decomp->mapVarParent();
@@ -1220,6 +1222,12 @@ bool Alignment::Active::induce(ActiveInduceParameters pp, ActiveUpdateParameters
 				// update historySparse and historySlicesSetEvent
 				if (ok)
 				{
+					ok = ok && this->historySparse && this->historySparse->arr;
+					if (!ok)
+					{
+						LOG "induce update\terror: historySparse not initialised" UNLOG
+						break;
+					}
 					if (v)
 					{
 						auto z = hr->size;
@@ -1252,7 +1260,7 @@ bool Alignment::Active::induce(ActiveInduceParameters pp, ActiveUpdateParameters
 							{
 								auto sliceB = vv[i];
 								auto eventA = ev[j];
-								this->historySparse.arr[eventA] = sliceB;
+								this->historySparse->arr[eventA] = sliceB;
 								this->historySlicesSetEvent[sliceA].erase(eventA);
 								this->historySlicesSetEvent[sliceB].insert(eventA);
 								slices.insert(sliceB);
@@ -1284,13 +1292,13 @@ bool Alignment::Active::induce(ActiveInduceParameters pp, ActiveUpdateParameters
 							std::size_t	sliceB = 0;						
 							if (ll->size())
 								sliceB = ll->back();
-							ok = ok && this->historySparse.arr;
+							ok = ok && this->historySparse && this->historySparse->arr;
 							if (!ok)
 							{
 								LOG "induce update\terror: historySparse not initialised" UNLOG
 								break;
 							}
-							this->historySparse.arr[eventB] = sliceB;
+							this->historySparse->arr[eventB] = sliceB;
 							this->historySlicesSetEvent[sliceB].insert(eventB);	
 							slices.insert(sliceB);							
 						}
@@ -1336,4 +1344,56 @@ bool Alignment::Active::induce(ActiveInduceParameters pp, ActiveUpdateParameters
 	}
 	
 	return ok;
+}
+
+void Alignment::activesPersistent(const Active& active, std::ostream& out)
+{
+	// out.write(reinterpret_cast<char*>((std::size_t*)&dr.listFudRepaSizeExpected), sizeof(std::size_t));
+	// out.write(reinterpret_cast<char*>((std::size_t*)&dr.fudRepasSize), sizeof(std::size_t));
+	// auto& ll = dr.fuds;
+	// std::size_t l = ll.size();
+	// out.write(reinterpret_cast<char*>(&l), sizeof(std::size_t));
+	// for (auto& fs : ll)
+	// {
+		// out.write(reinterpret_cast<char*>((std::size_t*)&fs.parent), sizeof(std::size_t));
+		// std::size_t c = fs.children.size();
+		// out.write(reinterpret_cast<char*>(&c), sizeof(std::size_t));
+		// for (auto sl : fs.children)
+			// out.write(reinterpret_cast<char*>(&sl), sizeof(std::size_t));
+		// std::size_t m = fs.fud.size();
+		// out.write(reinterpret_cast<char*>(&m), sizeof m);
+		// for (auto& tr : fs.fud)
+			// transformRepasPersistent(*tr,out);
+	// }
+}
+
+std::unique_ptr<Active> Alignment::persistentsActive(std::istream& in)
+{
+	auto active = std::make_unique<Active>();
+	// in.read(reinterpret_cast<char*>(&dr->listFudRepaSizeExpected), sizeof(std::size_t));
+	// in.read(reinterpret_cast<char*>(&dr->fudRepasSize), sizeof(std::size_t));
+	// auto& ll = dr->fuds;
+	// std::size_t l;
+	// in.read(reinterpret_cast<char*>(&l), sizeof(std::size_t));
+	// ll.resize(l);
+	// for (auto& fs : ll)
+	// {
+		// in.read(reinterpret_cast<char*>(&fs.parent), sizeof(std::size_t));
+		// std::size_t c;
+		// in.read(reinterpret_cast<char*>(&c), sizeof(std::size_t));
+		// for (std::size_t i = 0; i < c; i++)
+		// {
+			// std::size_t sl;
+			// in.read(reinterpret_cast<char*>(&sl), sizeof(std::size_t));
+			// fs.children.push_back(sl);
+		// }		
+		// std::size_t m;
+		// in.read(reinterpret_cast<char*>(&m), sizeof(std::size_t));
+		// for (std::size_t i = 0; i < m; i++)
+		// {
+			// auto tr = persistentsTransformRepa(in);
+			// fs.fud.push_back(std::move(tr));
+		// }
+	// }
+	return active;
 }
