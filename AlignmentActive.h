@@ -66,6 +66,11 @@ namespace Alignment
 		bool logging = false;
 	};
 	
+	struct ActiveIOParameters
+	{
+		std::string filename;
+	};
+	
 	struct Active
 	{
 		Active(std::string nameA = "");
@@ -113,19 +118,15 @@ namespace Alignment
 
 		bool induce(ActiveInduceParameters pp = ActiveInduceParameters(),
 					ActiveUpdateParameters ppu = ActiveUpdateParameters());
-		bool (*induceCallback)(std::size_t sliceA, std::size_t sliceSizeA);		
+		bool (*induceCallback)(std::size_t sliceA, std::size_t sliceSizeA);	
+
+		bool dump(const ActiveIOParameters&);
+		bool load(const ActiveIOParameters&);	
 	};
 }
 
 std::ostream& operator<<(std::ostream& out, const Alignment::ActiveEventsRepa&);
 
 std::ostream& operator<<(std::ostream& out, const Alignment::ActiveEventsArray&);
-
-namespace Alignment
-{
-	void activesPersistent(const Active&, std::ostream&);
-
-	std::unique_ptr<Active> persistentsActive(std::istream&);
-}
 
 #endif

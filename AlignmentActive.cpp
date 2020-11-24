@@ -1346,54 +1346,122 @@ bool Alignment::Active::induce(ActiveInduceParameters pp, ActiveUpdateParameters
 	return ok;
 }
 
-void Alignment::activesPersistent(const Active& active, std::ostream& out)
+
+bool Alignment::Active::dump(const ActiveIOParameters& pp)
 {
-	// out.write(reinterpret_cast<char*>((std::size_t*)&dr.listFudRepaSizeExpected), sizeof(std::size_t));
-	// out.write(reinterpret_cast<char*>((std::size_t*)&dr.fudRepasSize), sizeof(std::size_t));
-	// auto& ll = dr.fuds;
-	// std::size_t l = ll.size();
-	// out.write(reinterpret_cast<char*>(&l), sizeof(std::size_t));
-	// for (auto& fs : ll)
-	// {
-		// out.write(reinterpret_cast<char*>((std::size_t*)&fs.parent), sizeof(std::size_t));
-		// std::size_t c = fs.children.size();
-		// out.write(reinterpret_cast<char*>(&c), sizeof(std::size_t));
-		// for (auto sl : fs.children)
-			// out.write(reinterpret_cast<char*>(&sl), sizeof(std::size_t));
-		// std::size_t m = fs.fud.size();
-		// out.write(reinterpret_cast<char*>(&m), sizeof m);
-		// for (auto& tr : fs.fud)
-			// transformRepasPersistent(*tr,out);
-	// }
+	bool ok = true;
+	
+	std::ofstream out;
+	try 
+	{
+		std::lock_guard<std::mutex> guard(this->mutex);
+		if (ok)
+		{		
+			out.open(pp.filename, std::ios::binary);
+			ok = ok && out.good();
+			if (!ok)
+			{
+				LOG "dump error:\t failed to open file: " << pp.filename  UNLOG
+				ok = false;
+			}			
+		}
+		if (ok)
+		{		
+			std::size_t l = this->name.size();
+			if (ok) out.write(reinterpret_cast<char*>(&l), sizeof(std::size_t));
+			ok = ok && out.good();
+			if (ok && l) out.write(reinterpret_cast<char*>((char*)this->name.data()), l);
+			ok = ok && out.good();
+			if (!ok)
+			{
+				LOG "dump error:\t failed to write active name to file: " << pp.filename  UNLOG
+				ok = false;
+			}			
+		}
+		if (ok)
+		{		
+			out.close();
+			ok = ok && out.good();
+			if (!ok)
+			{
+				LOG "dump error:\t failed to close file: " << pp.filename  UNLOG
+				ok = false;
+			}			
+		}
+		else
+		{
+			out.close();			
+		}
+	} 
+	catch (const std::exception& e) 
+	{
+		LOG "dump error:\t failed to dump to file: " << pp.filename << "\terror message: " << e.what()  UNLOG
+		ok = false;
+		out.close();			
+	}
+	
+	return ok;
 }
 
-std::unique_ptr<Active> Alignment::persistentsActive(std::istream& in)
+
+bool Alignment::Active::load(const ActiveIOParameters& pp)
 {
-	auto active = std::make_unique<Active>();
-	// in.read(reinterpret_cast<char*>(&dr->listFudRepaSizeExpected), sizeof(std::size_t));
-	// in.read(reinterpret_cast<char*>(&dr->fudRepasSize), sizeof(std::size_t));
-	// auto& ll = dr->fuds;
-	// std::size_t l;
-	// in.read(reinterpret_cast<char*>(&l), sizeof(std::size_t));
-	// ll.resize(l);
-	// for (auto& fs : ll)
-	// {
-		// in.read(reinterpret_cast<char*>(&fs.parent), sizeof(std::size_t));
-		// std::size_t c;
-		// in.read(reinterpret_cast<char*>(&c), sizeof(std::size_t));
-		// for (std::size_t i = 0; i < c; i++)
-		// {
-			// std::size_t sl;
-			// in.read(reinterpret_cast<char*>(&sl), sizeof(std::size_t));
-			// fs.children.push_back(sl);
-		// }		
-		// std::size_t m;
-		// in.read(reinterpret_cast<char*>(&m), sizeof(std::size_t));
-		// for (std::size_t i = 0; i < m; i++)
-		// {
-			// auto tr = persistentsTransformRepa(in);
-			// fs.fud.push_back(std::move(tr));
-		// }
-	// }
-	return active;
+	bool ok = true;
+	
+	std::ifstream in;
+	try 
+	{
+		std::lock_guard<std::mutex> guard(this->mutex);
+		if (ok)
+		{		
+			in.open(pp.filename, std::ios::binary);
+			ok = ok && in.good();
+			if (!ok)
+			{
+				LOG "load error:\t failed to open file: " << pp.filename  UNLOG
+				ok = false;
+			}			
+		}
+		if (ok)
+		{		
+			std::size_t l;
+			if (ok) in.read(reinterpret_cast<char*>(&l), sizeof(std::size_t));
+			ok = ok && in.good();
+			if (ok && l) 
+			{
+				std::string s(l,' ');
+				in.read(reinterpret_cast<char*>((char*)s.data()), l);
+				ok = ok && in.good();
+				if (ok) this->name = s;
+			}
+			if (!ok)
+			{
+				LOG "load error:\t failed to read active name to file: " << pp.filename  UNLOG
+				ok = false;
+			}			
+		}
+		if (ok)
+		{		
+			in.close();
+			ok = ok && in.good();
+			if (!ok)
+			{
+				LOG "load error:\t failed to close file: " << pp.filename  UNLOG
+				ok = false;
+			}			
+		}
+		else
+		{
+			in.close();			
+		}
+	} 
+	catch (const std::exception& e) 
+	{
+		LOG "load error:\t failed to load from file: " << pp.filename << "\terror message: " << e.what()  UNLOG
+		ok = false;
+		in.close();			
+	}
+	
+	return ok;
 }
+
