@@ -338,20 +338,16 @@ bool Alignment::Active::update(ActiveUpdateParameters pp)
 						LOG "update\terror: drmul failed to return a list" UNLOG
 					}
 					// sync active slices
-					if (ok)
+					if (ok && this->historySparse)
 					{
 						if (ll->size())
 							sliceA = ll->back();
-						if (!this->historySparse || this->historySparse->size != this->historySize)
+						ok = ok && this->historySparse->size == this->historySize && this->historySparse->capacity == 1;
+						if (!ok)
 						{
-							this->historySparse = std::make_unique<HistorySparseArray>();
-							auto z = this->historySize;
-							auto& hr = this->historySparse;
-							delete[] hr->arr;
-							hr->size = z;
-							hr->capacity = 1;
-							hr->arr = new std::size_t[z];
-						}
+							LOG "update\terror: inconsistent history" UNLOG
+							break;
+						}	
 						std::size_t sliceB = this->historySparse->arr[this->historyEvent];
 						if (!sliceA || sliceA != sliceB)
 						{
@@ -1361,20 +1357,168 @@ bool Alignment::Active::dump(const ActiveIOParameters& pp)
 			ok = ok && out.good();
 			if (!ok)
 			{
-				LOG "dump error:\t failed to open file: " << pp.filename  UNLOG
+				LOG "dump error:\tfailed to open file: " << pp.filename  UNLOG
 				ok = false;
 			}			
 		}
 		if (ok)
 		{		
-			std::size_t l = this->name.size();
-			if (ok) out.write(reinterpret_cast<char*>(&l), sizeof(std::size_t));
+			std::size_t h = this->name.size();
+			if (ok) out.write(reinterpret_cast<char*>(&h), sizeof(std::size_t));
 			ok = ok && out.good();
-			if (ok && l) out.write(reinterpret_cast<char*>((char*)this->name.data()), l);
+			if (ok && h) out.write(reinterpret_cast<char*>((char*)this->name.data()), h);
 			ok = ok && out.good();
 			if (!ok)
 			{
-				LOG "dump error:\t failed to write active name to file: " << pp.filename  UNLOG
+				LOG "dump error:\tfailed to write active name to file: " << pp.filename  UNLOG
+				ok = false;
+			}			
+		}
+		if (ok)
+		{		
+			std::size_t h = this->underlyingEventUpdateds.size();
+			if (ok) out.write(reinterpret_cast<char*>(&h), sizeof(std::size_t));
+			ok = ok && out.good();
+			if (ok && h) 
+			{
+				std::size_t ev = *this->underlyingEventUpdateds.rbegin();
+				out.write(reinterpret_cast<char*>(&ev), sizeof(std::size_t));
+				ok = ok && out.good();
+			}
+			if (!ok)
+			{
+				LOG "dump error:\tfailed to write last event to file: " << pp.filename  UNLOG
+				ok = false;
+			}			
+		}
+		if (ok)
+		{		
+			if (ok) out.write(reinterpret_cast<char*>(&this->historySize), sizeof(std::size_t));
+			ok = ok && out.good();
+			if (ok) out.write(reinterpret_cast<char*>(&this->historyOverflow), 1);
+			ok = ok && out.good();
+			if (ok) out.write(reinterpret_cast<char*>(&this->historyEvent), sizeof(std::size_t));
+			ok = ok && out.good();
+			if (!ok)
+			{
+				LOG "dump error:\tfailed to dump history parameters to file: " << pp.filename  UNLOG
+				ok = false;
+			}			
+		}
+		if (ok)
+		{		
+			std::size_t hsize = this->underlyingHistoryRepa.size();
+			if (ok) out.write(reinterpret_cast<char*>(&hsize), sizeof(std::size_t));
+			ok = ok && out.good();
+			if (ok && hsize) 
+			{
+				for (std::size_t h = 0; ok && h < hsize; h++)	
+				{
+					auto& hr = this->underlyingHistoryRepa[h];
+					ok = ok && hr;
+					if (!ok)
+					{
+						LOG "dump error:\tfailed to write undefined underlying history repa to file: " << pp.filename  UNLOG
+						ok = false;
+					}
+					auto n = hr->dimension;
+					auto vv = hr->vectorVar;
+					auto sh = hr->shape;
+					auto rr = hr->arr;
+					if (ok) out.write(reinterpret_cast<char*>(&n), sizeof(std::size_t));
+					ok = ok && out.good();
+					for (std::size_t i = 0; ok && i < n; i++)
+					{
+						if (ok) out.write(reinterpret_cast<char*>(&vv[i]), sizeof(std::size_t));
+						ok = ok && out.good();
+						if (ok) out.write(reinterpret_cast<char*>(&sh[i]), sizeof(std::size_t));
+						ok = ok && out.good();
+					}
+					auto y = this->historyOverflow ? this->historySize : this->historyEvent;
+					if (ok && y) out.write(reinterpret_cast<char*>(hr->arr), y*n);
+					ok = ok && out.good();						
+				}
+			}
+			if (!ok)
+			{
+				LOG "dump error:\tfailed to write underlying history repa to file: " << pp.filename  UNLOG
+				ok = false;
+			}			
+		}
+		if (ok)
+		{		
+			std::size_t hsize = this->underlyingHistorySparse.size();
+			if (ok) out.write(reinterpret_cast<char*>(&hsize), sizeof(std::size_t));
+			ok = ok && out.good();
+			if (ok && hsize) 
+			{
+				for (std::size_t h = 0; ok && h < hsize; h++)	
+				{
+					auto& hr = this->underlyingHistorySparse[h];
+					ok = ok && hr;
+					if (!ok)
+					{
+						LOG "dump error:\tfailed to write undefined underlying history sparse to file: " << pp.filename  UNLOG
+						ok = false;
+					}
+					auto n = hr->capacity;
+					auto rr = hr->arr;
+					if (ok) out.write(reinterpret_cast<char*>(&n), sizeof(std::size_t));
+					ok = ok && out.good();
+					auto y = this->historyOverflow ? this->historySize : this->historyEvent;
+					if (ok && y) out.write(reinterpret_cast<char*>(hr->arr), y*n*sizeof(std::size_t));
+					ok = ok && out.good();						
+				}
+			}			
+			if (!ok)
+			{
+				LOG "dump error:\tfailed to write underlying history sparse to file: " << pp.filename  UNLOG
+				ok = false;
+			}			
+		}
+		if (ok)
+		{		
+			std::size_t hsize = this->underlyingSlicesParent.size();
+			if (ok) out.write(reinterpret_cast<char*>(&hsize), sizeof(std::size_t));
+			ok = ok && out.good();
+			if (ok && hsize) 
+			{
+				for (auto& p : this->underlyingSlicesParent)	
+				{
+					if (ok) out.write(reinterpret_cast<char*>((std::size_t*)&p.first), sizeof(std::size_t));
+					ok = ok && out.good();
+					if (ok) out.write(reinterpret_cast<char*>((std::size_t*)&p.second), sizeof(std::size_t));
+					ok = ok && out.good();		
+					if (!ok)
+						break;
+				}
+			}			
+			if (!ok)
+			{
+				LOG "dump error:\tfailed to write underlying sparse parents to file: " << pp.filename  UNLOG
+				ok = false;
+			}			
+		}
+		if (ok)
+		{		
+			std::size_t hsize = this->underlyingSlicesParent.size();
+			if (ok) out.write(reinterpret_cast<char*>(&hsize), sizeof(std::size_t));
+			ok = ok && out.good();
+			if (ok && hsize) 
+			{
+				for (auto& p : this->underlyingSlicesParent)	
+				{
+					if (ok) out.write(reinterpret_cast<char*>((std::size_t*)&p.first), sizeof(std::size_t));
+					ok = ok && out.good();
+					if (ok) out.write(reinterpret_cast<char*>((std::size_t*)&p.second), sizeof(std::size_t));
+					ok = ok && out.good();		
+					if (!ok)
+						break;
+				}
+			}			
+			if (!ok)
+			{
+				LOG "dump error:\tfailed to write decomp to file: " << pp.filename  UNLOG
 				ok = false;
 			}			
 		}
@@ -1384,7 +1528,7 @@ bool Alignment::Active::dump(const ActiveIOParameters& pp)
 			ok = ok && out.good();
 			if (!ok)
 			{
-				LOG "dump error:\t failed to close file: " << pp.filename  UNLOG
+				LOG "dump error:\tfailed to close file: " << pp.filename  UNLOG
 				ok = false;
 			}			
 		}
@@ -1395,7 +1539,7 @@ bool Alignment::Active::dump(const ActiveIOParameters& pp)
 	} 
 	catch (const std::exception& e) 
 	{
-		LOG "dump error:\t failed to dump to file: " << pp.filename << "\terror message: " << e.what()  UNLOG
+		LOG "dump error:\tfailed to dump to file: " << pp.filename << "\terror message: " << e.what()  UNLOG
 		ok = false;
 		out.close();			
 	}
@@ -1418,25 +1562,175 @@ bool Alignment::Active::load(const ActiveIOParameters& pp)
 			ok = ok && in.good();
 			if (!ok)
 			{
-				LOG "load error:\t failed to open file: " << pp.filename  UNLOG
+				LOG "load error:\tfailed to open file: " << pp.filename  UNLOG
 				ok = false;
 			}			
 		}
 		if (ok)
 		{		
-			std::size_t l;
-			if (ok) in.read(reinterpret_cast<char*>(&l), sizeof(std::size_t));
+			std::size_t h;
+			if (ok) in.read(reinterpret_cast<char*>(&h), sizeof(std::size_t));
 			ok = ok && in.good();
-			if (ok && l) 
+			if (ok && h) 
 			{
-				std::string s(l,' ');
-				in.read(reinterpret_cast<char*>((char*)s.data()), l);
+				std::string s(h,' ');
+				in.read(reinterpret_cast<char*>((char*)s.data()), h);
 				ok = ok && in.good();
 				if (ok) this->name = s;
 			}
 			if (!ok)
 			{
-				LOG "load error:\t failed to read active name to file: " << pp.filename  UNLOG
+				LOG "load error:\tfailed to read active name from file: " << pp.filename  UNLOG
+				ok = false;
+			}			
+		}
+		if (ok)
+		{		
+			std::size_t h;
+			if (ok) in.read(reinterpret_cast<char*>(&h), sizeof(std::size_t));
+			ok = ok && in.good();
+			if (ok && h) 
+			{
+				std::size_t ev;
+				in.read(reinterpret_cast<char*>(&ev), sizeof(std::size_t));
+				ok = ok && in.good();
+				if (ok)
+				{
+					this->underlyingEventUpdateds.clear();
+					this->underlyingEventUpdateds.insert(ev);
+				}
+			}
+			if (!ok)
+			{
+				LOG "load error:\tfailed to read last event from file: " << pp.filename  UNLOG
+				ok = false;
+			}			
+		}
+		if (ok)
+		{		
+			if (ok) in.read(reinterpret_cast<char*>(&this->historySize), sizeof(std::size_t));
+			ok = ok && in.good();
+			if (ok) in.read(reinterpret_cast<char*>(&this->historyOverflow), 1);
+			ok = ok && in.good();
+			if (ok) in.read(reinterpret_cast<char*>(&this->historyEvent), sizeof(std::size_t));
+			ok = ok && in.good();
+			if (!ok)
+			{
+				LOG "load error:\tfailed to read history parameters from file: " << pp.filename  UNLOG
+				ok = false;
+			}			
+		}
+		if (ok)
+		{		
+			std::size_t hsize = 0;
+			if (ok) in.read(reinterpret_cast<char*>(&hsize), sizeof(std::size_t));
+			ok = ok && in.good();
+			if (ok && hsize)
+			{
+				this->underlyingHistoryRepa.clear();
+				this->underlyingHistoryRepa.reserve(hsize);
+				for (std::size_t h = 0; ok && h < hsize; h++)	
+				{
+					auto hr = std::make_shared<HistoryRepa>();
+					std::size_t n;
+					if (ok) in.read(reinterpret_cast<char*>(&n), sizeof(std::size_t));
+					ok = ok && in.good();
+					if (ok) hr->dimension = n;
+					if (ok && n)
+					{
+						hr->vectorVar = new std::size_t[n];
+						auto vv = hr->vectorVar;
+						hr->shape = new std::size_t[n];
+						auto sh = hr->shape;
+						for (std::size_t i = 0; ok && i < n; i++)
+						{
+							if (ok) in.read(reinterpret_cast<char*>(&vv[i]), sizeof(std::size_t));
+							ok = ok && in.good();
+							if (ok) in.read(reinterpret_cast<char*>(&sh[i]), sizeof(std::size_t));
+							ok = ok && in.good();
+						}		
+					}
+					if (ok) hr->evient = true;
+					auto z = this->historySize;
+					if (ok) hr->size = z;
+					if (ok && z && n) hr->arr = new unsigned char[z*n];
+					auto y = this->historyOverflow ? this->historySize : this->historyEvent;
+					if (ok && y && n)
+					{
+						in.read(reinterpret_cast<char*>(hr->arr), y*n);		
+						ok = ok && in.good();
+					}
+					if (ok)
+						this->underlyingHistoryRepa.push_back(hr);
+				}				
+			}
+			if (!ok)
+			{
+				LOG "load error:\tfailed to read underlying history repa from file: " << pp.filename  UNLOG
+				ok = false;
+			}			
+		}
+		if (ok)
+		{		
+			std::size_t hsize = 0;
+			if (ok) in.read(reinterpret_cast<char*>(&hsize), sizeof(std::size_t));
+			ok = ok && in.good();
+			if (ok && hsize)
+			{
+				this->underlyingHistorySparse.clear();
+				this->underlyingHistorySparse.reserve(hsize);
+				for (std::size_t h = 0; ok && h < hsize; h++)	
+				{
+					auto hr = std::make_shared<HistorySparseArray>();
+					std::size_t n;
+					if (ok) in.read(reinterpret_cast<char*>(&n), sizeof(std::size_t));
+					ok = ok && in.good();
+					if (ok) hr->capacity = n;
+					auto z = this->historySize;
+					if (ok) hr->size = z;
+					if (ok && z && n) hr->arr = new std::size_t[z*n];
+					auto y = this->historyOverflow ? this->historySize : this->historyEvent;
+					if (ok && y && n)
+					{
+						in.read(reinterpret_cast<char*>(hr->arr), y*n*sizeof(std::size_t));		
+						ok = ok && in.good();
+					}
+					if (ok)
+						this->underlyingHistorySparse.push_back(hr);
+				}				
+			}
+			if (!ok)
+			{
+				LOG "load error:\tfailed to read underlying history sparse from file: " << pp.filename  UNLOG
+				ok = false;
+			}			
+		}
+		if (ok)
+		{		
+			std::size_t hsize = 0;
+			if (ok) in.read(reinterpret_cast<char*>(&hsize), sizeof(std::size_t));
+			ok = ok && in.good();
+			if (ok && hsize)
+			{
+				this->underlyingSlicesParent.clear();
+				this->underlyingSlicesParent.reserve(hsize);
+				for (std::size_t h = 0; ok && h < hsize; h++)	
+				{
+					std::size_t first;
+					if (ok) in.read(reinterpret_cast<char*>(&first), sizeof(std::size_t));
+					ok = ok && in.good();
+					std::size_t second;
+					if (ok) in.read(reinterpret_cast<char*>(&second), sizeof(std::size_t));
+					ok = ok && in.good();
+					if (ok)
+						this->underlyingSlicesParent.insert_or_assign(first,second);
+					else
+						break;
+				}				
+			}
+			if (!ok)
+			{
+				LOG "load error:\tfailed to read underlying sparse parents from file: " << pp.filename  UNLOG
 				ok = false;
 			}			
 		}
@@ -1446,7 +1740,7 @@ bool Alignment::Active::load(const ActiveIOParameters& pp)
 			ok = ok && in.good();
 			if (!ok)
 			{
-				LOG "load error:\t failed to close file: " << pp.filename  UNLOG
+				LOG "load error:\tfailed to close file: " << pp.filename  UNLOG
 				ok = false;
 			}			
 		}
@@ -1457,7 +1751,7 @@ bool Alignment::Active::load(const ActiveIOParameters& pp)
 	} 
 	catch (const std::exception& e) 
 	{
-		LOG "load error:\t failed to load from file: " << pp.filename << "\terror message: " << e.what()  UNLOG
+		LOG "load error:\tfailed to load from file: " << pp.filename << "\terror message: " << e.what()  UNLOG
 		ok = false;
 		in.close();			
 	}
