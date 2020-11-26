@@ -1524,6 +1524,40 @@ bool Alignment::Active::dump(const ActiveIOParameters& pp)
 				}
 			}					
 		}
+		if (ok)
+		{		
+			bool has = this->decomp ? true : false;
+			out.write(reinterpret_cast<char*>(&has), 1);
+			if (ok && has) 
+				decompFudSlicedRepasPersistent(*this->decomp, out);
+		}
+		if (ok)
+		{		
+			out.write(reinterpret_cast<char*>(&this->bits), sizeof(int));
+			out.write(reinterpret_cast<char*>(&this->var), sizeof(std::size_t));
+			out.write(reinterpret_cast<char*>(&this->varSlice), sizeof(std::size_t));
+			out.write(reinterpret_cast<char*>(&this->induceThreshold), sizeof(std::size_t));
+			std::size_t hsize = this->induceVarExlusions.size();
+			out.write(reinterpret_cast<char*>(&hsize), sizeof(std::size_t));
+			if (ok && hsize) 
+			{
+				for (auto v : this->induceVarExlusions)	
+					out.write(reinterpret_cast<char*>((std::size_t*)&v), sizeof(std::size_t));
+			}
+		}
+		if (ok)
+		{		
+			bool has = this->historySparse ? true : false;
+			out.write(reinterpret_cast<char*>(&has), 1);
+			if (ok && has) 
+			{
+				auto& hr = this->historySparse;
+				if (this->historyOverflow)
+					historySparseArraysPersistent(*hr, out);
+				else
+					historySparseArraysPersistentInitial(*hr, this->historyEvent, out);
+			}
+		}
 		out.close();
 	} 
 	catch (const std::exception& e) 
@@ -1633,8 +1667,56 @@ bool Alignment::Active::load(const ActiveIOParameters& pp)
 				}				
 			}		
 		}		
-		
-		in.exceptions(in.failbit | in.badbit);
+		if (ok)
+		{		
+			bool has = false;
+			in.read(reinterpret_cast<char*>(&has), 1);
+			this->decomp.reset();
+			if (ok && has)
+				this->decomp = persistentsDecompFudSlicedRepa(in);	
+		}
+		if (ok)
+		{		
+			in.read(reinterpret_cast<char*>(&this->bits), sizeof(int));
+			in.read(reinterpret_cast<char*>(&this->var), sizeof(std::size_t));
+			in.read(reinterpret_cast<char*>(&this->varSlice), sizeof(std::size_t));		
+			in.read(reinterpret_cast<char*>(&this->induceThreshold), sizeof(std::size_t));
+			std::size_t hsize = 0;
+			in.read(reinterpret_cast<char*>(&hsize), sizeof(std::size_t));
+			this->induceVarExlusions.clear();		
+			for (std::size_t h = 0; ok && h < hsize; h++)	
+			{
+				std::size_t v;
+				in.read(reinterpret_cast<char*>(&v), sizeof(std::size_t));
+				this->induceVarExlusions.insert(v);
+			}	
+		}
+		if (ok)
+		{		
+			bool has = false;
+			in.read(reinterpret_cast<char*>(&has), 1);
+			this->historySparse.reset();
+			this->historySlicesSetEvent.clear();
+			this->induceSlices.clear();
+			this->induceSliceFailsSize.clear();
+			if (ok && has)
+			{
+				if (this->historyOverflow)
+					this->historySparse = persistentsHistorySparseArray(in);
+				else
+					this->historySparse = persistentInitialsHistorySparseArray(in);		
+				auto& hr = this->historySparse;	
+				auto& slev = this->historySlicesSetEvent;		
+				auto z = this->historyOverflow ? this->historySize : this->historyEvent;
+				auto rr = hr->arr;	
+				for (std::size_t j = 0; j < z; j++)
+					slev[rr[j]].insert(j);
+				if (ok && this->induceThreshold)
+					for (auto pp : slev)
+						if (pp.second.size() >= induceThreshold)
+							this->induceSlices.insert(pp.first);					
+			}
+		}
 		in.close();
 	} 
 	catch (const std::exception& e) 
