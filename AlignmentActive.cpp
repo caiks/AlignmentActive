@@ -102,7 +102,7 @@ Active::Active(std::string nameA) : name(nameA),terminate(false), log(log_defaul
 // event ids should be monotonic and updated no more than once
 bool Alignment::Active::update(ActiveUpdateParameters pp)
 {
-	auto drmul = historyRepaPtrListsHistorySparseArrayPtrListsDecompFudSlicedRepasEventsPathSlice_u;
+	auto drmul = listVarValuesDecompFudSlicedRepasPathSlice_u;
 
 	bool ok = true;
 	try 
@@ -331,7 +331,53 @@ bool Alignment::Active::update(ActiveUpdateParameters pp)
 				if (ok)
 				{
 					auto mark = (ok && this->logging) ? clk::now() : std::chrono::time_point<clk>();
-					auto ll = drmul(this->underlyingHistoryRepa,this->underlyingHistorySparse,*this->decomp,this->historyEvent,pp.mapCapacity);	
+					SizeUCharStructList jj;
+					{
+						std::size_t m = 0;
+						for (auto& hr : this->underlyingHistoryRepa)
+							m += hr->dimension;
+						for (auto& hr : this->underlyingHistorySparse)
+							m += 50;
+						jj.reserve(m);
+						auto j = this->historyEvent;
+						for (auto& hr : this->underlyingHistoryRepa)
+						{
+							auto n = hr->dimension;
+							auto vv = hr->vectorVar;
+							auto rr = hr->arr;	
+							for (std::size_t i = 0; i < n; i++)
+							{
+								SizeUCharStruct qq;
+								qq.uchar = rr[j*n + i];			
+								if (qq.uchar)
+								{
+									qq.size = vv[i];
+									jj.push_back(qq);
+								}
+							}							
+						}
+						auto& slpp = this->underlyingSlicesParent;						
+						for (auto& hr : this->underlyingHistorySparse)
+						{
+							auto v = hr->arr[j];
+							{
+								SizeUCharStruct qq;
+								qq.uchar = 1;			
+								qq.size = v;
+								jj.push_back(qq);
+							}								
+							auto it = slpp.find(v);
+							while (it != slpp.end())
+							{
+								SizeUCharStruct qq;
+								qq.uchar = 1;
+								qq.size = it->second;
+								jj.push_back(qq);
+								it = slpp.find(it->second);
+							}							
+						}						
+					}
+					auto ll = drmul(jj,*this->decomp,pp.mapCapacity);	
 					ok = ok && ll;
 					if (!ok)
 					{
@@ -496,7 +542,7 @@ bool Alignment::Active::induce(ActiveInduceParameters pp, ActiveUpdateParameters
 	auto llfr = setVariablesListTransformRepasFudRepa_u;
 	auto frmul = historyRepasFudRepasMultiply_up;
 	auto frdep = fudRepasSetVarsDepends;
-	auto drmul = historyRepaPtrListsHistorySparseArrayPtrListsDecompFudSlicedRepasEventsPathSlice_u;
+	auto drmul = listVarValuesDecompFudSlicedRepasPathSlice_u;
 	auto layerer = parametersLayererMaxRollByMExcludedSelfHighestLogIORepa_up;
 		
 	bool ok = true;
@@ -1278,7 +1324,53 @@ bool Alignment::Active::induce(ActiveInduceParameters pp, ActiveUpdateParameters
 						SizeSet slices;
 						for (auto eventB : eventsB)
 						{
-							auto ll = drmul(this->underlyingHistoryRepa,this->underlyingHistorySparse,*this->decomp,eventB,ppu.mapCapacity);	
+							SizeUCharStructList jj;
+							{
+								std::size_t m = 0;
+								for (auto& hr : this->underlyingHistoryRepa)
+									m += hr->dimension;
+								for (auto& hr : this->underlyingHistorySparse)
+									m += 50;
+								jj.reserve(m);
+								auto j = eventB;
+								for (auto& hr : this->underlyingHistoryRepa)
+								{
+									auto n = hr->dimension;
+									auto vv = hr->vectorVar;
+									auto rr = hr->arr;	
+									for (std::size_t i = 0; i < n; i++)
+									{
+										SizeUCharStruct qq;
+										qq.uchar = rr[j*n + i];			
+										if (qq.uchar)
+										{
+											qq.size = vv[i];
+											jj.push_back(qq);
+										}
+									}							
+								}
+								auto& slpp = this->underlyingSlicesParent;						
+								for (auto& hr : this->underlyingHistorySparse)
+								{
+									auto v = hr->arr[j];
+									{
+										SizeUCharStruct qq;
+										qq.uchar = 1;			
+										qq.size = v;
+										jj.push_back(qq);
+									}								
+									auto it = slpp.find(v);
+									while (it != slpp.end())
+									{
+										SizeUCharStruct qq;
+										qq.uchar = 1;
+										qq.size = it->second;
+										jj.push_back(qq);
+										it = slpp.find(it->second);
+									}							
+								}						
+							}
+							auto ll = drmul(jj,*this->decomp,ppu.mapCapacity);	
 							ok = ok && ll;
 							if (!ok)
 							{
