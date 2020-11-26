@@ -394,7 +394,7 @@ bool Alignment::Active::update(ActiveUpdateParameters pp)
 							LOG "update\terror: inconsistent history" UNLOG
 							break;
 						}	
-						std::size_t sliceB = this->historySparse->arr[this->historyEvent];
+						std::size_t sliceB = this->historyOverflow ? this->historySparse->arr[this->historyEvent] : 0;
 						if (!sliceA || sliceA != sliceB)
 						{
 							this->historySparse->arr[this->historyEvent] = sliceA;
@@ -468,7 +468,7 @@ bool Alignment::Active::update(ActiveUpdateParameters pp)
 								if (refs)
 									refs--;									
 								if (!refs)
-									eventsB.insert(qq.first);									
+									eventsB.insert(qq.first);
 							}
 						}	
 						for (auto eventB : eventsB)	
@@ -490,7 +490,7 @@ bool Alignment::Active::update(ActiveUpdateParameters pp)
 								if (refs)
 									refs--;									
 								if (!refs)
-									eventsB.insert(qq.first);									
+									eventsB.insert(qq.first);
 							}
 						}	
 						for (auto eventB : eventsB)	
@@ -508,7 +508,7 @@ bool Alignment::Active::update(ActiveUpdateParameters pp)
 								eventsB.insert(eventB);	
 						eventsB.erase(*this->underlyingEventUpdateds.rbegin());
 						for (auto eventB : eventsB)
-							this->underlyingEventUpdateds.erase(eventB);							
+							this->underlyingEventUpdateds.erase(eventB);
 					}
 				}	
 			}
