@@ -315,7 +315,7 @@ bool Alignment::Active::update(ActiveUpdateParameters pp)
 						rr[j] = v;
 						if (v && this->underlyingSlicesParent.find(v) == this->underlyingSlicesParent.end())
 							for (int i = n-1; i > 0; i--)
-								if (rr1[i])
+								if (rr1[i] && rr1[i-1])
 									this->underlyingSlicesParent[rr1[i]] = rr1[i-1];
 					}
 				}
@@ -608,7 +608,7 @@ bool Alignment::Active::induce(ActiveInduceParameters pp, ActiveUpdateParameters
 					eventsA.insert(eventsA.end(),setEventsA.begin(),setEventsA.end());
 					if (ok && llr.size())
 					{
-						auto& qqx = this->induceVarExlusions;					
+						auto& qqx = this->induceVarExclusions;					
 						for (auto& hr : llr)
 						{
 							auto n = hr->dimension;
@@ -672,7 +672,7 @@ bool Alignment::Active::induce(ActiveInduceParameters pp, ActiveUpdateParameters
 						haa->capacity = na;
 						haa->arr = new std::size_t[za*na];
 						auto raa = haa->arr;
-						slppa.reserve(za*na);
+						slppa.reserve(za*na*4);
 						for (std::size_t i = 0; i < na; i++)
 						{
 							auto& hr = lla[i];
@@ -692,7 +692,6 @@ bool Alignment::Active::induce(ActiveInduceParameters pp, ActiveUpdateParameters
 								}
 							}
 						}
-						// EVAL(sorted(slppa));
 					}
 				}
 				if (ok && this->logging)
@@ -750,35 +749,23 @@ bool Alignment::Active::induce(ActiveInduceParameters pp, ActiveUpdateParameters
 									mma[ll[i]].insert(ll[m]);
 						}
 					}
-					// EVAL(sorted(qqa));
-					// EVAL(sorted(mma));
 				}
 				// get top nmax vars by entropy
 				// remove any sparse parents with same entropy as children
 				if (ok && (qqr.size() || qqa.size()))
 				{
-					// EVAL(qqr.size());
-					// EVAL(qqr);
-					// EVAL(qqa.size());
-					// EVAL(qqa);
 					auto nmax = (std::size_t)std::sqrt(pp.znnmax / (double)(2*sliceSizeA));
-					// EVAL(nmax);
 					nmax = std::max(nmax, pp.bmax);
-					// EVAL(nmax);
 					DoubleSizePairList ee;
 					ee.reserve(qqr.size() + qqa.size());
 					if (qqr.size())
 					{
 						SizeList vv(qqr.begin(),qqr.end());
 						auto eer = prents(*hrpr(vv.size(), vv.data(), *hrr));
-						// EVAL(*hrr);
-						// EVAL(*hrpr(vv.size(), vv.data(), *hrr));
-						// EVAL(*eer);
 						for (auto p : *eer)
 							if (p.first > repaRounding)
 								ee.push_back(DoubleSizePair(-p.first,p.second));
 					}
-					// EVAL(ee);
 					if (qqa.size())
 					{
 						std::map<std::size_t, SizeSet> eem;
@@ -819,20 +806,17 @@ bool Alignment::Active::induce(ActiveInduceParameters pp, ActiveUpdateParameters
 									xx.insert(v);
 							}
 						}	
-						// EVAL(eem);
 						double f = 1.0/(double)sliceSizeA;
 						for (auto& p : eem)	
-							for (auto& q : p.second)	
-							{
-								double a = (double)p.first * f;
-								double e = -(a * std::log(a) + (1.0-a) * std::log(1.0-a));
-								if (e > repaRounding)
+						{
+							double a = (double)p.first * f;
+							double e = -(a * std::log(a) + (1.0-a) * std::log(1.0-a));
+							if (e > repaRounding)
+								for (auto& q : p.second)	
 									ee.push_back(DoubleSizePair(-e,q));
-							}
+						}
 					}
-					std::sort(ee.begin(), ee.end());
-					// EVAL(ee.size());
-					// EVAL(ee);
+					if (ee.size()) std::sort(ee.begin(), ee.end());
 					SizeUSet qq;
 					qq.reserve(ee.size());
 					for (std::size_t i = 0; i < nmax && i < ee.size(); i++)
@@ -862,10 +846,6 @@ bool Alignment::Active::induce(ActiveInduceParameters pp, ActiveUpdateParameters
 							LOG "induce model\tno entropy"  UNLOG
 						}
 					}	
-					// EVAL(qqr.size());
-					// EVAL(qqr);
-					// EVAL(qqa.size());
-					// EVAL(qqa);
 				}	
 				if (ok && !fail)
 				{
@@ -873,7 +853,6 @@ bool Alignment::Active::induce(ActiveInduceParameters pp, ActiveUpdateParameters
 					std::ranlux48_base gen((unsigned int)pp.seed);
 					if (ok && qqr.size())
 					{
-						// EVAL(*hrr);
 						if (qqr.size() < hrr->dimension)
 						{
 							SizeList vv(qqr.begin(),qqr.end());
@@ -881,9 +860,7 @@ bool Alignment::Active::induce(ActiveInduceParameters pp, ActiveUpdateParameters
 						}
 						else
 							hr = std::move(hrr);
-						// EVAL(*hr);
 						hrs = hrshuffle(*hr,gen);
-						// EVAL(*hrs);
 					}
 					if (ok && qqa.size())
 					{
@@ -970,8 +947,6 @@ bool Alignment::Active::induce(ActiveInduceParameters pp, ActiveUpdateParameters
 								}						
 							}													
 						}					
-						// EVAL(*hra);					
-						// EVAL(*hras);					
 						if (hr)
 						{
 							hr = hrjoin(HistoryRepaPtrList{std::move(hr),std::move(hra)});
@@ -982,8 +957,6 @@ bool Alignment::Active::induce(ActiveInduceParameters pp, ActiveUpdateParameters
 							hr = std::move(hra);
 							hrs = std::move(hras);
 						}	
-						// EVAL(*hr);		
-						// EVAL(*hrs);					
 					}
 					// check consistent reduction
 					if (ok)
@@ -1033,10 +1006,6 @@ bool Alignment::Active::induce(ActiveInduceParameters pp, ActiveUpdateParameters
 								auto m = kk.size();
 								auto z = hr->size;
 								diagonal = 100.0*(exp(algn/z/(m-1))-1.0);
-								// EVAL(frvars(*fr)->size());
-								// EVAL(frder(*fr)->size());
-								// EVAL(frund(*fr)->size());
-								// EVAL(sorted(*frund(*fr)));
 							}
 						}
 						catch (const std::out_of_range& e)
@@ -1099,9 +1068,7 @@ bool Alignment::Active::induce(ActiveInduceParameters pp, ActiveUpdateParameters
 						}
 					fr->reframe_u(nn);
 					for (std::size_t i = 0; i < kk.size(); i++)	
-						kk[i] = nn[kk[i]];
-					// EVAL(kk);
-					// EVAL(sorted(*frvars(*fr)));			
+						kk[i] = nn[kk[i]];	
 				}				
 				std::size_t v = 0;
 				SizeList sl;
@@ -1255,13 +1222,13 @@ bool Alignment::Active::induce(ActiveInduceParameters pp, ActiveUpdateParameters
 					for (auto& ii : fr->layers)
 						for (auto& tr : ii)
 							fs.fud.push_back(tr);
+					dr.fudRepasSize += fs.fud.size();
 					auto& vi = dr.mapVarInt();
 					vi[sliceA] = dr.fuds.size() - 1;
 					auto& cv = dr.mapVarParent();
 					for (auto s : sl)
 						cv[s] = sliceA;
 				}
-				// update historySparse and historySlicesSetEvent
 				if (ok)
 				{
 					ok = ok && this->historySparse && this->historySparse->arr;
@@ -1270,6 +1237,10 @@ bool Alignment::Active::induce(ActiveInduceParameters pp, ActiveUpdateParameters
 						LOG "induce update\terror: historySparse not initialised" UNLOG
 						break;
 					}
+				}
+				// update historySparse and historySlicesSetEvent
+				if (ok)
+				{
 					if (v)
 					{
 						auto z = hr->size;
@@ -1329,8 +1300,7 @@ bool Alignment::Active::induce(ActiveInduceParameters pp, ActiveUpdateParameters
 								std::size_t m = 0;
 								for (auto& hr : this->underlyingHistoryRepa)
 									m += hr->dimension;
-								for (auto& hr : this->underlyingHistorySparse)
-									m += 50;
+								m += this->underlyingHistorySparse.size()*50;
 								jj.reserve(m);
 								auto j = eventB;
 								for (auto& hr : this->underlyingHistoryRepa)
@@ -1349,7 +1319,7 @@ bool Alignment::Active::induce(ActiveInduceParameters pp, ActiveUpdateParameters
 										}
 									}							
 								}
-								auto& slpp = this->underlyingSlicesParent;						
+								auto& slpp = this->underlyingSlicesParent;
 								for (auto& hr : this->underlyingHistorySparse)
 								{
 									auto v = hr->arr[j];
@@ -1371,21 +1341,13 @@ bool Alignment::Active::induce(ActiveInduceParameters pp, ActiveUpdateParameters
 								}						
 							}
 							auto ll = drmul(jj,*this->decomp,ppu.mapCapacity);	
-							ok = ok && ll;
+							ok = ok && ll && ll->size() && !ll->back();
 							if (!ok)
 							{
 								LOG "induce update\terror: drmul failed to return a list" UNLOG
 								break;
-							}	
-							std::size_t	sliceB = 0;						
-							if (ll->size())
-								sliceB = ll->back();
-							ok = ok && this->historySparse && this->historySparse->arr;
-							if (!ok)
-							{
-								LOG "induce update\terror: historySparse not initialised" UNLOG
-								break;
 							}
+							std::size_t	sliceB = ll->back();
 							this->historySparse->arr[eventB] = sliceB;
 							this->historySlicesSetEvent[sliceB].insert(eventB);	
 							slices.insert(sliceB);							
@@ -1417,12 +1379,6 @@ bool Alignment::Active::induce(ActiveInduceParameters pp, ActiveUpdateParameters
 					LOG "induce update fail\tslice: " << sliceA << "\tslice size: " << sliceSizeA  << "\ttime " << ((sec)(clk::now() - mark)).count() << "s" UNLOG
 				}					
 			}
-			// EVAL(sliceA);
-			// EVAL(sliceSizeA);
-			// EVAL(*hrr);
-			// EVAL(*haa);
-			// if (this->decomp) { EVAL(*this->decomp);}
-			// ok = false;
 		}
 	} 
 	catch (const std::exception& e) 
@@ -1434,7 +1390,6 @@ bool Alignment::Active::induce(ActiveInduceParameters pp, ActiveUpdateParameters
 	return ok;
 }
 
-
 bool Alignment::Active::dump(const ActiveIOParameters& pp)
 {
 	bool ok = true;
@@ -1442,6 +1397,7 @@ bool Alignment::Active::dump(const ActiveIOParameters& pp)
 	std::ofstream out;
 	try 
 	{
+		auto mark = (ok && this->logging) ? clk::now() : std::chrono::time_point<clk>();
 		out.exceptions(out.failbit | out.badbit);
 		std::lock_guard<std::mutex> guard(this->mutex);
 		out.open(pp.filename, std::ios::binary);
@@ -1537,11 +1493,11 @@ bool Alignment::Active::dump(const ActiveIOParameters& pp)
 			out.write(reinterpret_cast<char*>(&this->var), sizeof(std::size_t));
 			out.write(reinterpret_cast<char*>(&this->varSlice), sizeof(std::size_t));
 			out.write(reinterpret_cast<char*>(&this->induceThreshold), sizeof(std::size_t));
-			std::size_t hsize = this->induceVarExlusions.size();
+			std::size_t hsize = this->induceVarExclusions.size();
 			out.write(reinterpret_cast<char*>(&hsize), sizeof(std::size_t));
 			if (ok && hsize) 
 			{
-				for (auto v : this->induceVarExlusions)	
+				for (auto v : this->induceVarExclusions)	
 					out.write(reinterpret_cast<char*>((std::size_t*)&v), sizeof(std::size_t));
 			}
 		}
@@ -1559,6 +1515,10 @@ bool Alignment::Active::dump(const ActiveIOParameters& pp)
 			}
 		}
 		out.close();
+		if (ok && this->logging)
+		{
+			LOG "dump\tfile name: " << pp.filename << "\ttime " << ((sec)(clk::now() - mark)).count() << "s" UNLOG
+		}	
 	} 
 	catch (const std::exception& e) 
 	{
@@ -1570,7 +1530,6 @@ bool Alignment::Active::dump(const ActiveIOParameters& pp)
 	return ok;
 }
 
-
 bool Alignment::Active::load(const ActiveIOParameters& pp)
 {
 	bool ok = true;
@@ -1578,6 +1537,7 @@ bool Alignment::Active::load(const ActiveIOParameters& pp)
 	std::ifstream in;
 	try 
 	{
+		auto mark = (ok && this->logging) ? clk::now() : std::chrono::time_point<clk>();
 		in.exceptions(in.failbit | in.badbit | in.eofbit);
 		std::lock_guard<std::mutex> guard(this->mutex);	
 		in.open(pp.filename, std::ios::binary);
@@ -1673,7 +1633,11 @@ bool Alignment::Active::load(const ActiveIOParameters& pp)
 			in.read(reinterpret_cast<char*>(&has), 1);
 			this->decomp.reset();
 			if (ok && has)
+			{
 				this->decomp = persistentsDecompFudSlicedRepa(in);	
+				this->decomp->mapVarInt();
+				this->decomp->mapVarParent();
+			}
 		}
 		if (ok)
 		{		
@@ -1683,12 +1647,12 @@ bool Alignment::Active::load(const ActiveIOParameters& pp)
 			in.read(reinterpret_cast<char*>(&this->induceThreshold), sizeof(std::size_t));
 			std::size_t hsize = 0;
 			in.read(reinterpret_cast<char*>(&hsize), sizeof(std::size_t));
-			this->induceVarExlusions.clear();		
+			this->induceVarExclusions.clear();		
 			for (std::size_t h = 0; ok && h < hsize; h++)	
 			{
 				std::size_t v;
 				in.read(reinterpret_cast<char*>(&v), sizeof(std::size_t));
-				this->induceVarExlusions.insert(v);
+				this->induceVarExclusions.insert(v);
 			}	
 		}
 		if (ok)
@@ -1718,6 +1682,10 @@ bool Alignment::Active::load(const ActiveIOParameters& pp)
 			}
 		}
 		in.close();
+		if (ok && this->logging)
+		{
+			LOG "load\tfile name: " << pp.filename << "\ttime " << ((sec)(clk::now() - mark)).count() << "s" UNLOG
+		}	
 	} 
 	catch (const std::exception& e) 
 	{
