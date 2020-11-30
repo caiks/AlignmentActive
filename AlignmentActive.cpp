@@ -850,7 +850,7 @@ bool Alignment::Active::induce(ActiveInduceParameters pp, ActiveUpdateParameters
 				if (ok && !fail)
 				{
 					std::unique_ptr<HistoryRepa> hrs;
-					std::ranlux48_base gen((unsigned int)pp.seed);
+					std::ranlux48_base gen((unsigned int)(pp.seed+sliceA));
 					if (ok && qqr.size())
 					{
 						if (qqr.size() < hrr->dimension)
