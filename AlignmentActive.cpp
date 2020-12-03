@@ -1077,19 +1077,6 @@ bool Alignment::Active::induce(ActiveInduceParameters pp, ActiveUpdateParameters
 				{		
 					if (!this->decomp)
 						this->decomp = std::make_unique<DecompFudSlicedRepa>();
-					if (sliceA)
-					{
-						auto& mm = this->decomp->mapVarParent();
-						auto it = mm.find(sliceA);
-						if (it != mm.end())
-							v = it->second;
-						else
-						{
-							ok = false;
-							LOG "induce update\terror: cannot find parent slice of slice " << sliceA UNLOG
-							break;							
-						}
-					}
 					auto m = kk.size();
 					auto ar = hrred(1.0, m, kk.data(), *frmul(pp.tint, *hr, *fr));
 					std::size_t sz = 1;
@@ -1118,14 +1105,14 @@ bool Alignment::Active::induce(ActiveInduceParameters pp, ActiveUpdateParameters
 							continue;
 						}
 						auto tr = std::make_shared<TransformRepa>();
-						if (v)
+						if (sliceA)
 						{
 							tr->dimension = m + 1;
 							tr->vectorVar = new std::size_t[m + 1];
 							auto ww = tr->vectorVar;
 							tr->shape = new std::size_t[m + 1];
 							auto sh = tr->shape;
-							ww[0] = v;
+							ww[0] = sliceA;
 							sh[0] = 2;
 							for (std::size_t j = 0; j < m; j++)
 							{
@@ -1166,14 +1153,14 @@ bool Alignment::Active::induce(ActiveInduceParameters pp, ActiveUpdateParameters
 					if (remainder)
 					{
 						auto tr = std::make_shared<TransformRepa>();
-						if (v)
+						if (sliceA)
 						{
 							tr->dimension = m + 1;
 							tr->vectorVar = new std::size_t[m + 1];
 							auto ww = tr->vectorVar;
 							tr->shape = new std::size_t[m + 1];
 							auto sh = tr->shape;
-							ww[0] = v;
+							ww[0] = sliceA;
 							sh[0] = 2;
 							for (std::size_t j = 0; j < m; j++)
 							{
@@ -1241,13 +1228,13 @@ bool Alignment::Active::induce(ActiveInduceParameters pp, ActiveUpdateParameters
 				// update historySparse and historySlicesSetEvent
 				if (ok)
 				{
-					if (v)
+					if (sliceA)
 					{
 						auto z = hr->size;
 						auto hrr = std::make_unique<HistoryRepa>();
 						hrr->dimension = 1;
 						hrr->vectorVar = new std::size_t[1];
-						hrr->vectorVar[0] = v;
+						hrr->vectorVar[0] = sliceA;
 						hrr->shape = new std::size_t[1];
 						hrr->shape[0] = 2;
 						hrr->size = z;
@@ -1362,7 +1349,7 @@ bool Alignment::Active::induce(ActiveInduceParameters pp, ActiveUpdateParameters
 				}
 				if (ok && this->logging)
 				{
-					LOG "induce update\tslice: " << sliceA << "\tparent slice: " << v << "\tchildren cardinality: " << sl.size() << "\tchildren slices: " << sl << "\tfud size: " << this->decomp->fuds.back().fud.size() << "\tfud cardinality: " << this->decomp->fuds.size() << "\tmodel cardinality: " << this->decomp->fudRepasSize << "\ttime " << ((sec)(clk::now() - mark)).count() << "s" UNLOG
+					LOG "induce update\tslice: " << sliceA << "\tparent slice: " << v << "\tchildren cardinality: " << sl.size() << "\tfud size: " << this->decomp->fuds.back().fud.size() << "\tfud cardinality: " << this->decomp->fuds.size() << "\tmodel cardinality: " << this->decomp->fudRepasSize << "\ttime " << ((sec)(clk::now() - mark)).count() << "s" UNLOG
 				}	
 				if (ok && induceCallback)
 				{
