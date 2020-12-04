@@ -348,7 +348,7 @@ bool Alignment::Active::update(ActiveUpdateParameters pp)
 							for (std::size_t i = 0; i < n; i++)
 							{
 								SizeUCharStruct qq;
-								qq.uchar = rr[j*n + i];			
+								qq.uchar = rr[j*n + i];	
 								if (qq.uchar)
 								{
 									qq.size = vv[i];
