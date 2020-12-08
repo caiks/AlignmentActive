@@ -333,49 +333,80 @@ bool Alignment::Active::update(ActiveUpdateParameters pp)
 					auto mark = (ok && this->logging) ? clk::now() : std::chrono::time_point<clk>();
 					SizeUCharStructList jj;
 					{
+						SizeList frameUnderlyingsA;
+						if (this->frameUnderlyings.size())
+							frameUnderlyingsA.insert(frameUnderlyingsA.end(),this->frameUnderlyings.begin(), this->frameUnderlyings.end());
+						else
+							frameUnderlyingsA.push_back(0);
 						std::size_t m = 0;
 						for (auto& hr : this->underlyingHistoryRepa)
-							m += hr->dimension;
+							m += hr->dimension*frameUnderlyingsA.size();
 						for (auto& hr : this->underlyingHistorySparse)
-							m += 50;
+							m += 50*frameUnderlyingsA.size();
 						jj.reserve(m);
+						auto z = this->historySize;
+						auto over = this->historyOverflow;
 						auto j = this->historyEvent;
-						for (auto& hr : this->underlyingHistoryRepa)
+						for (auto f : frameUnderlyingsA)
 						{
-							auto n = hr->dimension;
-							auto vv = hr->vectorVar;
-							auto rr = hr->arr;	
-							for (std::size_t i = 0; i < n; i++)
+							auto& mm = this->framesVarsOffset[f];
+							for (auto& hr : this->underlyingHistoryRepa)
 							{
-								SizeUCharStruct qq;
-								qq.uchar = rr[j*n + i];	
-								if (qq.uchar)
+								auto n = hr->dimension;
+								auto vv = hr->vectorVar;
+								auto rr = hr->arr;	
+								for (std::size_t i = 0; i < n; i++)
 								{
-									qq.size = vv[i];
+									SizeUCharStruct qq;
+									if (f <= j)
+										qq.uchar = rr[(j-f)*n + i];	
+									else if (f && over && z > f)
+										qq.uchar = rr[((j+z-f)%z)*n + i];	
+									else
+										qq.uchar = 0;
+									if (qq.uchar)
+									{
+										qq.size = vv[i];
+										if (f)
+										{
+											auto x = qq.size >> this->bits << this->bits;
+											auto it = mm.find(x);
+											if (it != mm.end())
+												qq.size += it->second;
+											else
+											{
+												auto y = this->system->next(this->bits);
+												mm[x] = y-x;
+												qq.size += y-x;
+											}
+										}
+										jj.push_back(qq);
+									}
+								}							
+							}
+							// TODO handle frameUnderlyings for sparse
+							auto& slpp = this->underlyingSlicesParent;						
+							for (auto& hr : this->underlyingHistorySparse)
+							{
+								auto v = hr->arr[j];
+								{
+									SizeUCharStruct qq;
+									qq.uchar = 1;			
+									qq.size = v;
 									jj.push_back(qq);
-								}
-							}							
+								}								
+								auto it = slpp.find(v);
+								while (it != slpp.end())
+								{
+									SizeUCharStruct qq;
+									qq.uchar = 1;
+									qq.size = it->second;
+									jj.push_back(qq);
+									it = slpp.find(it->second);
+								}							
+							}										
 						}
-						auto& slpp = this->underlyingSlicesParent;						
-						for (auto& hr : this->underlyingHistorySparse)
-						{
-							auto v = hr->arr[j];
-							{
-								SizeUCharStruct qq;
-								qq.uchar = 1;			
-								qq.size = v;
-								jj.push_back(qq);
-							}								
-							auto it = slpp.find(v);
-							while (it != slpp.end())
-							{
-								SizeUCharStruct qq;
-								qq.uchar = 1;
-								qq.size = it->second;
-								jj.push_back(qq);
-								it = slpp.find(it->second);
-							}							
-						}						
+						// TODO handle frameHistorys
 					}
 					auto ll = drmul(jj,*this->decomp,pp.mapCapacity);	
 					ok = ok && ll;
