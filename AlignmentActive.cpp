@@ -384,29 +384,125 @@ bool Alignment::Active::update(ActiveUpdateParameters pp)
 									}
 								}							
 							}
-							// TODO handle frameUnderlyings for sparse
 							auto& slpp = this->underlyingSlicesParent;						
 							for (auto& hr : this->underlyingHistorySparse)
 							{
-								auto v = hr->arr[j];
+								std::size_t v = 0;
+								if (f <= j)
+									v = hr->arr[j-f];
+								else if (f && over && z > f)
+									v = hr->arr[(j+z-f)%z]; 
+								if (v)
 								{
-									SizeUCharStruct qq;
-									qq.uchar = 1;			
-									qq.size = v;
-									jj.push_back(qq);
-								}								
-								auto it = slpp.find(v);
-								while (it != slpp.end())
-								{
-									SizeUCharStruct qq;
-									qq.uchar = 1;
-									qq.size = it->second;
-									jj.push_back(qq);
-									it = slpp.find(it->second);
-								}							
+									{
+										SizeUCharStruct qq;
+										qq.uchar = 1;			
+										qq.size = v;
+										if (f)
+										{
+											auto x = qq.size >> this->bits << this->bits;
+											auto it = mm.find(x);
+											if (it != mm.end())
+												qq.size += it->second;
+											else
+											{
+												auto y = this->system->next(this->bits);
+												mm[x] = y-x;
+												qq.size += y-x;
+											}
+										}
+										jj.push_back(qq);
+									}								
+									auto it = slpp.find(v);
+									while (it != slpp.end())
+									{
+										SizeUCharStruct qq;
+										qq.uchar = 1;
+										qq.size = it->second;
+										if (f)
+										{
+											auto x = qq.size >> this->bits << this->bits;
+											auto it = mm.find(x);
+											if (it != mm.end())
+												qq.size += it->second;
+											else
+											{
+												auto y = this->system->next(this->bits);
+												mm[x] = y-x;
+												qq.size += y-x;
+											}
+										}
+										jj.push_back(qq);
+										it = slpp.find(it->second);
+									}										
+								}
 							}										
 						}
-						// TODO handle frameHistorys
+						if (this->decomp && this->historySparse)
+						{
+							ok = ok && this->historySparse->size == this->historySize && this->historySparse->capacity == 1;
+							if (!ok)
+							{
+								LOG "update\terror: inconsistent history" UNLOG
+								break;
+							}
+							auto& hr = this->historySparse;
+							auto& slpp = this->decomp->mapVarParent();
+							this->frameHistorys.erase(0);
+							for (auto f : this->frameHistorys)
+							{
+								auto& mm = this->framesVarsOffset[f];
+								std::size_t v = 0;
+								if (f <= j)
+									v = hr->arr[j-f];
+								else if (f && over && z > f)
+									v = hr->arr[(j+z-f)%z]; 
+								if (v)
+								{
+									{
+										SizeUCharStruct qq;
+										qq.uchar = 1;			
+										qq.size = v;
+										if (f)
+										{
+											auto x = qq.size >> this->bits << this->bits;
+											auto it = mm.find(x);
+											if (it != mm.end())
+												qq.size += it->second;
+											else
+											{
+												auto y = this->system->next(this->bits);
+												mm[x] = y-x;
+												qq.size += y-x;
+											}
+										}
+										jj.push_back(qq);
+									}								
+									auto it = slpp.find(v);
+									while (it != slpp.end())
+									{
+										SizeUCharStruct qq;
+										qq.uchar = 1;
+										qq.size = it->second;
+										if (f)
+										{
+											auto x = qq.size >> this->bits << this->bits;
+											auto it = mm.find(x);
+											if (it != mm.end())
+												qq.size += it->second;
+											else
+											{
+												auto y = this->system->next(this->bits);
+												mm[x] = y-x;
+												qq.size += y-x;
+											}
+										}
+										jj.push_back(qq);
+										it = slpp.find(it->second);
+									}										
+								}
+							}										
+						}
 					}
 					auto ll = drmul(jj,*this->decomp,pp.mapCapacity);	
 					ok = ok && ll;
@@ -634,6 +730,11 @@ bool Alignment::Active::induce(ActiveInduceParameters pp, ActiveUpdateParameters
 				// copy events from evient active history to varient selection
 				if (ok)
 				{
+					SizeList frameUnderlyingsA;
+					if (this->frameUnderlyings.size())
+						frameUnderlyingsA.insert(frameUnderlyingsA.end(),this->frameUnderlyings.begin(), this->frameUnderlyings.end());
+					else
+						frameUnderlyingsA.push_back(0);
 					varA = this->var;
 					auto& setEventsA = this->historySlicesSetEvent[sliceA];
 					eventsA.insert(eventsA.end(),setEventsA.begin(),setEventsA.end());
@@ -655,7 +756,7 @@ bool Alignment::Active::induce(ActiveInduceParameters pp, ActiveUpdateParameters
 					if (ok && qqr.size())
 					{
 						hrr = std::make_unique<HistoryRepa>();
-						hrr->dimension = qqr.size();
+						hrr->dimension = qqr.size()*frameUnderlyingsA.size();
 						auto nr = hrr->dimension;
 						hrr->vectorVar = new std::size_t[nr];
 						auto vvr = hrr->vectorVar;
@@ -667,31 +768,58 @@ bool Alignment::Active::induce(ActiveInduceParameters pp, ActiveUpdateParameters
 						hrr->arr = new unsigned char[zr*nr];
 						auto rrr = hrr->arr;		
 						auto ev = eventsA.data();
+						auto z = this->historySize;
+						auto over = this->historyOverflow;
 						{
 							std::size_t i = 0;
-							for (auto v : qqr)
+							for (auto f : frameUnderlyingsA)
 							{
-								vvr[i] = v;
-								for (auto& hr : llr)
+								auto& mm = this->framesVarsOffset[f];
+								for (auto v : qqr)
 								{
-									auto& mvv = hr->mapVarInt();
-									auto it = mvv.find(v);
-									if (it != mvv.end())
+									vvr[i] = v;
+									if (f)
 									{
-										auto n = hr->dimension;
-										auto rr = hr->arr;
-										auto k = it->second;
-										shr[i] = hr->shape[k];
-										auto izr = i*zr;
-										for (std::size_t j = 0; j < zr; j++)
-											rrr[izr + j] = rr[ev[j]*n + k];
-										break;
+										auto x = vvr[i] >> this->bits << this->bits;
+										auto it = mm.find(x);
+										if (it != mm.end())
+											vvr[i] += it->second;
+										else
+										{
+											auto y = this->system->next(this->bits);
+											mm[x] = y-x;
+											vvr[i] += y-x;
+										}
 									}
+									for (auto& hr : llr)
+									{
+										auto& mvv = hr->mapVarInt();
+										auto it = mvv.find(v);
+										if (it != mvv.end())
+										{
+											auto n = hr->dimension;
+											auto rr = hr->arr;
+											auto k = it->second;
+											shr[i] = hr->shape[k];
+											auto izr = i*zr;
+											for (std::size_t j = 0; j < zr; j++)
+												if (f <= ev[j])
+													rrr[izr + j] = rr[(ev[j]-f)*n + k];
+												else if (f && over && z > f)
+													rrr[izr + j] = rr[((ev[j]+z-f)%z)*n + k];
+												else
+													rrr[izr + j] = 0;
+											break;
+										}
+									}
+									i++;
 								}
-								i++;
 							}
 						}
+						for (std::size_t i = 0; i < nr; i++)
+							qqr.insert(vvr[i]);
 					}
+					// TODO frameUnderlyingsA sparse and this->frameHistorys
 					if (ok && lla.size())
 					{
 						auto za = eventsA.size(); 
