@@ -96,6 +96,18 @@ Active::Active(std::string nameA) : name(nameA),terminate(false), log(log_defaul
 {
 }
 
+std::size_t Alignment::Active::varMax() const
+{
+	std::size_t v = this->var;
+	v = std::max(v,this->varSlice);	
+	if (this->decomp)
+		v = std::max(v,this->decomp->varMax());
+	for (auto& p : this->framesVarsOffset)
+		for (auto& q : p.second)	
+			v = std::max(v,q.first+q.second);						
+	return (((v >> this->bits) + 1) << this->bits) - 1;
+}
+
 #define UNLOG ; log_str.flush(); this->log(log_str.str());}
 #define LOG { std::ostringstream log_str; log_str << (this->name.size() ? this->name + "\t" : "") <<
 
@@ -331,8 +343,19 @@ bool Alignment::Active::update(ActiveUpdateParameters pp)
 				if (ok)
 				{
 					auto mark = (ok && this->logging) ? clk::now() : std::chrono::time_point<clk>();
-					SizeUCharStructList jj;
+					if (ok && this->historySparse)
 					{
+						ok = ok && this->historySparse->size == this->historySize && this->historySparse->capacity == 1;
+						if (!ok)
+						{
+							LOG "update\terror: inconsistent history" UNLOG
+							break;
+						}
+					}
+					SizeUCharStructList jj;
+					if (ok)
+					{
+						this->frameHistorys.erase(0);
 						SizeList frameUnderlyingsA;
 						if (this->frameUnderlyings.size())
 							frameUnderlyingsA.insert(frameUnderlyingsA.end(),this->frameUnderlyings.begin(), this->frameUnderlyings.end());
@@ -341,8 +364,8 @@ bool Alignment::Active::update(ActiveUpdateParameters pp)
 						std::size_t m = 0;
 						for (auto& hr : this->underlyingHistoryRepa)
 							m += hr->dimension*frameUnderlyingsA.size();
-						for (auto& hr : this->underlyingHistorySparse)
-							m += 50*frameUnderlyingsA.size();
+						m += 50*this->underlyingHistorySparse.size()*frameUnderlyingsA.size();
+						m += 50*this->frameHistorys.size();
 						jj.reserve(m);
 						auto z = this->historySize;
 						auto over = this->historyOverflow;
@@ -438,17 +461,10 @@ bool Alignment::Active::update(ActiveUpdateParameters pp)
 								}
 							}										
 						}
-						if (this->decomp && this->historySparse)
+						if (ok && this->decomp && this->historySparse && this->frameHistorys.size())
 						{
-							ok = ok && this->historySparse->size == this->historySize && this->historySparse->capacity == 1;
-							if (!ok)
-							{
-								LOG "update\terror: inconsistent history" UNLOG
-								break;
-							}
 							auto& hr = this->historySparse;
 							auto& slpp = this->decomp->mapVarParent();
-							this->frameHistorys.erase(0);
 							for (auto f : this->frameHistorys)
 							{
 								auto& mm = this->framesVarsOffset[f];
@@ -504,11 +520,15 @@ bool Alignment::Active::update(ActiveUpdateParameters pp)
 							}										
 						}
 					}
-					auto ll = drmul(jj,*this->decomp,pp.mapCapacity);	
-					ok = ok && ll;
-					if (!ok)
+					std::unique_ptr<SizeList> ll;
+					if (ok)
 					{
-						LOG "update\terror: drmul failed to return a list" UNLOG
+						ll = drmul(jj,*this->decomp,pp.mapCapacity);	
+						ok = ok && ll;
+						if (!ok)
+						{
+							LOG "update\terror: drmul failed to return a list" UNLOG
+						}						
 					}
 					// sync active slices
 					if (ok && this->historySparse)
@@ -730,14 +750,15 @@ bool Alignment::Active::induce(ActiveInduceParameters pp, ActiveUpdateParameters
 				// copy events from evient active history to varient selection
 				if (ok)
 				{
+					varA = this->var;
+					auto& setEventsA = this->historySlicesSetEvent[sliceA];
+					eventsA.insert(eventsA.end(),setEventsA.begin(),setEventsA.end());
+					this->frameHistorys.erase(0);
 					SizeList frameUnderlyingsA;
 					if (this->frameUnderlyings.size())
 						frameUnderlyingsA.insert(frameUnderlyingsA.end(),this->frameUnderlyings.begin(), this->frameUnderlyings.end());
 					else
 						frameUnderlyingsA.push_back(0);
-					varA = this->var;
-					auto& setEventsA = this->historySlicesSetEvent[sliceA];
-					eventsA.insert(eventsA.end(),setEventsA.begin(),setEventsA.end());
 					if (ok && llr.size())
 					{
 						auto& qqx = this->induceVarExclusions;					
@@ -770,87 +791,211 @@ bool Alignment::Active::induce(ActiveInduceParameters pp, ActiveUpdateParameters
 						auto ev = eventsA.data();
 						auto z = this->historySize;
 						auto over = this->historyOverflow;
+						std::size_t i = 0;
+						for (auto f : frameUnderlyingsA)
 						{
-							std::size_t i = 0;
-							for (auto f : frameUnderlyingsA)
+							auto& mm = this->framesVarsOffset[f];
+							for (auto v : qqr)
 							{
-								auto& mm = this->framesVarsOffset[f];
-								for (auto v : qqr)
+								vvr[i] = v;
+								if (f)
 								{
-									vvr[i] = v;
-									if (f)
+									auto x = vvr[i] >> this->bits << this->bits;
+									auto it = mm.find(x);
+									if (it != mm.end())
+										vvr[i] += it->second;
+									else
 									{
-										auto x = vvr[i] >> this->bits << this->bits;
-										auto it = mm.find(x);
-										if (it != mm.end())
-											vvr[i] += it->second;
-										else
-										{
-											auto y = this->system->next(this->bits);
-											mm[x] = y-x;
-											vvr[i] += y-x;
-										}
+										auto y = this->system->next(this->bits);
+										mm[x] = y-x;
+										vvr[i] += y-x;
 									}
-									for (auto& hr : llr)
-									{
-										auto& mvv = hr->mapVarInt();
-										auto it = mvv.find(v);
-										if (it != mvv.end())
-										{
-											auto n = hr->dimension;
-											auto rr = hr->arr;
-											auto k = it->second;
-											shr[i] = hr->shape[k];
-											auto izr = i*zr;
-											for (std::size_t j = 0; j < zr; j++)
-												if (f <= ev[j])
-													rrr[izr + j] = rr[(ev[j]-f)*n + k];
-												else if (f && over && z > f)
-													rrr[izr + j] = rr[((ev[j]+z-f)%z)*n + k];
-												else
-													rrr[izr + j] = 0;
-											break;
-										}
-									}
-									i++;
 								}
+								for (auto& hr : llr)
+								{
+									auto& mvv = hr->mapVarInt();
+									auto it = mvv.find(v);
+									if (it != mvv.end())
+									{
+										auto n = hr->dimension;
+										auto rr = hr->arr;
+										auto k = it->second;
+										shr[i] = hr->shape[k];
+										auto izr = i*zr;
+										for (std::size_t j = 0; j < zr; j++)
+											if (f <= ev[j])
+												rrr[izr + j] = rr[(ev[j]-f)*n + k];
+											else if (f && over && z > f)
+												rrr[izr + j] = rr[((ev[j]+z-f)%z)*n + k];
+											else
+												rrr[izr + j] = 0;
+										break;
+									}
+								}
+								i++;
 							}
 						}
-						for (std::size_t i = 0; i < nr; i++)
+						for (i = 0; i < nr; i++)
 							qqr.insert(vvr[i]);
 					}
-					// TODO frameUnderlyingsA sparse and this->frameHistorys
 					if (ok && lla.size())
 					{
 						auto za = eventsA.size(); 
-						auto na = lla.size();
+						auto na = lla.size()*frameUnderlyingsA.size();
+						if (this->decomp && this->historySparse)
+							na += this->frameHistorys.size();
 						auto ev = eventsA.data();
-						auto& slpp = this->underlyingSlicesParent;
+						auto z = this->historySize;
+						auto over = this->historyOverflow;
 						haa = std::make_unique<HistorySparseArray>();
 						haa->size = za;
 						haa->capacity = na;
 						haa->arr = new std::size_t[za*na];
 						auto raa = haa->arr;
 						slppa.reserve(za*na*4);
-						for (std::size_t i = 0; i < na; i++)
+						std::size_t i = 0;
+						if (ok)
 						{
-							auto& hr = lla[i];
-							auto rr = hr->arr;
-							for (std::size_t j = 0; j < za; j++)
+							auto& slpp = this->underlyingSlicesParent;
+							for (auto f : frameUnderlyingsA)
 							{
-								auto v = rr[ev[j]];
-								raa[j*na + i] = v;
-								if (v)
+								auto& mm = this->framesVarsOffset[f];
+								for (auto& hr : lla)
 								{
-									auto it = slpp.find(v);
-									while (it != slpp.end())
+									auto rr = hr->arr;
+									for (std::size_t j = 0; j < za; j++)
 									{
-										slppa.insert_or_assign(it->first, it->second);
-										it = slpp.find(it->second);
+										std::size_t v = 0;
+										if (f <= ev[j])
+											v = rr[ev[j]-f];
+										else if (f && over && z > f)
+											v = rr[(ev[j]+z-f)%z];
+										raa[j*na + i] = v;
+										if (v)
+										{
+											if (f)
+											{
+												auto x = v >> this->bits << this->bits;
+												auto it = mm.find(x);
+												if (it != mm.end())
+													raa[j*na + i] += it->second;
+												else
+												{
+													auto y = this->system->next(this->bits);
+													mm[x] = y-x;
+													raa[j*na + i] += y-x;
+												}
+											}
+											auto it = slpp.find(v);
+											while (it != slpp.end())
+											{
+												auto w1 = it->first;
+												if (f)
+												{
+													auto x = w1 >> this->bits << this->bits;
+													auto it = mm.find(x);
+													if (it != mm.end())
+														w1 += it->second;
+													else
+													{
+														auto y = this->system->next(this->bits);
+														mm[x] = y-x;
+														w1 += y-x;
+													}
+												}
+												auto w2 = it->second;
+												if (f)
+												{
+													auto x = w2 >> this->bits << this->bits;
+													auto it = mm.find(x);
+													if (it != mm.end())
+														w2 += it->second;
+													else
+													{
+														auto y = this->system->next(this->bits);
+														mm[x] = y-x;
+														w2 += y-x;
+													}
+												}
+												slppa.insert_or_assign(w1, w2);
+												it = slpp.find(it->second);
+											}
+										}
+									}	
+									i++;								
+								}
+							}							
+						}
+						if (ok && this->decomp && this->historySparse && this->frameHistorys.size())
+						{
+							auto& hr = this->historySparse;
+							auto& slpp = this->decomp->mapVarParent();
+							for (auto f : this->frameHistorys)
+							{
+								auto& mm = this->framesVarsOffset[f];
+								auto rr = hr->arr;
+								for (std::size_t j = 0; j < za; j++)
+								{
+									std::size_t v = 0;
+									if (f <= ev[j])
+										v = rr[ev[j]-f];
+									else if (f && over && z > f)
+										v = rr[(ev[j]+z-f)%z];
+									raa[j*na + i] = v;
+									if (v)
+									{
+										if (f)
+										{
+											auto x = v >> this->bits << this->bits;
+											auto it = mm.find(x);
+											if (it != mm.end())
+												raa[j*na + i] += it->second;
+											else
+											{
+												auto y = this->system->next(this->bits);
+												mm[x] = y-x;
+												raa[j*na + i] += y-x;
+											}
+										}
+										auto it = slpp.find(v);
+										while (it != slpp.end())
+										{
+											auto w1 = it->first;
+											if (f)
+											{
+												auto x = w1 >> this->bits << this->bits;
+												auto it = mm.find(x);
+												if (it != mm.end())
+													w1 += it->second;
+												else
+												{
+													auto y = this->system->next(this->bits);
+													mm[x] = y-x;
+													w1 += y-x;
+												}
+											}
+											auto w2 = it->second;
+											if (f)
+											{
+												auto x = w2 >> this->bits << this->bits;
+												auto it = mm.find(x);
+												if (it != mm.end())
+													w2 += it->second;
+												else
+												{
+													auto y = this->system->next(this->bits);
+													mm[x] = y-x;
+													w2 += y-x;
+												}
+											}
+											slppa.insert_or_assign(w1, w2);
+											it = slpp.find(it->second);
+										}
 									}
 								}
-							}
-						}
+								i++;
+							}										
+						}						
 					}
 				}
 				if (ok && this->logging)
@@ -1660,6 +1805,37 @@ bool Alignment::Active::dump(const ActiveIOParameters& pp)
 					historySparseArraysPersistentInitial(*hr, this->historyEvent, out);
 			}
 		}
+		if (ok)
+		{		
+			std::size_t hsize = this->frameUnderlyings.size();
+			out.write(reinterpret_cast<char*>(&hsize), sizeof(std::size_t));
+			for (auto v : this->frameUnderlyings)	
+				out.write(reinterpret_cast<char*>((std::size_t*)&v), sizeof(std::size_t));
+		}
+		if (ok)
+		{		
+			std::size_t hsize = this->frameHistorys.size();
+			out.write(reinterpret_cast<char*>(&hsize), sizeof(std::size_t));
+			for (auto v : this->frameHistorys)	
+				out.write(reinterpret_cast<char*>((std::size_t*)&v), sizeof(std::size_t));
+		}
+		if (ok)
+		{		
+			std::size_t hsize = this->framesVarsOffset.size();
+			out.write(reinterpret_cast<char*>(&hsize), sizeof(std::size_t));
+			for (auto mm : this->framesVarsOffset)	
+			{
+				std::size_t i = mm.first;
+				out.write(reinterpret_cast<char*>(&i), sizeof(std::size_t));
+				std::size_t msize = mm.second.size();
+				out.write(reinterpret_cast<char*>(&msize), sizeof(std::size_t));
+				for (auto p : mm.second)	
+				{
+					out.write(reinterpret_cast<char*>((std::size_t*)&p.first), sizeof(std::size_t));
+					out.write(reinterpret_cast<char*>((std::size_t*)&p.second), sizeof(std::size_t));						
+				}
+			}
+		}
 		out.close();
 		if (ok && this->logging)
 		{
@@ -1826,6 +2002,53 @@ bool Alignment::Active::load(const ActiveIOParameters& pp)
 						if (pp.second.size() >= induceThreshold)
 							this->induceSlices.insert(pp.first);					
 			}
+		}
+		if (ok)
+		{		
+			std::size_t hsize = 0;
+			in.read(reinterpret_cast<char*>(&hsize), sizeof(std::size_t));
+			this->frameUnderlyings.clear();		
+			for (std::size_t h = 0; ok && h < hsize; h++)	
+			{
+				std::size_t v;
+				in.read(reinterpret_cast<char*>(&v), sizeof(std::size_t));
+				this->frameUnderlyings.insert(v);
+			}	
+		}
+		if (ok)
+		{		
+			std::size_t hsize = 0;
+			in.read(reinterpret_cast<char*>(&hsize), sizeof(std::size_t));
+			this->frameHistorys.clear();		
+			for (std::size_t h = 0; ok && h < hsize; h++)	
+			{
+				std::size_t v;
+				in.read(reinterpret_cast<char*>(&v), sizeof(std::size_t));
+				this->frameHistorys.insert(v);
+			}	
+		}
+		if (ok)
+		{		
+			std::size_t hsize = 0;
+			in.read(reinterpret_cast<char*>(&hsize), sizeof(std::size_t));
+			this->framesVarsOffset.clear();		
+			for (std::size_t h = 0; ok && h < hsize; h++)	
+			{
+				std::size_t i;
+				in.read(reinterpret_cast<char*>(&i), sizeof(std::size_t));
+				auto& mm = this->framesVarsOffset[i];				
+				std::size_t msize;
+				in.read(reinterpret_cast<char*>(&msize), sizeof(std::size_t));
+				mm.reserve(msize);
+				for (std::size_t m = 0; ok && m < msize; m++)	
+				{
+					std::size_t p;
+					in.read(reinterpret_cast<char*>(&p), sizeof(std::size_t));
+					std::size_t q;
+					in.read(reinterpret_cast<char*>(&q), sizeof(std::size_t));
+					mm[p] = q;
+				}
+			}	
 		}
 		in.close();
 		if (ok && this->logging)

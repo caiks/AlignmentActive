@@ -117,6 +117,8 @@ namespace Alignment
 		SizeSet frameHistorys;
 		std::map<std::size_t, SizeSizeUMap> framesVarsOffset;		
 		
+		std::size_t varMax() const;
+		
 		bool update(ActiveUpdateParameters pp = ActiveUpdateParameters());
 		bool (*updateCallback)(const SizeSet& eventsA, std::size_t eventA, std::size_t historyEventA, std::size_t sliceA);
 
