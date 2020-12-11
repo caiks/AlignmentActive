@@ -442,6 +442,8 @@ bool Alignment::Active::update(ActiveUpdateParameters pp)
 										SizeUCharStruct qq;
 										qq.uchar = 1;
 										qq.size = it->second;
+										if (!qq.size)
+											break;
 										if (f)
 										{
 											auto x = qq.size >> this->bits << this->bits;
@@ -500,6 +502,8 @@ bool Alignment::Active::update(ActiveUpdateParameters pp)
 										SizeUCharStruct qq;
 										qq.uchar = 1;
 										qq.size = it->second;
+										if (!qq.size)
+											break;										
 										if (f)
 										{
 											auto x = qq.size >> this->bits << this->bits;
@@ -517,7 +521,7 @@ bool Alignment::Active::update(ActiveUpdateParameters pp)
 										it = slpp.find(it->second);
 									}										
 								}
-							}										
+							}
 						}
 					}
 					std::unique_ptr<SizeList> ll;
@@ -835,10 +839,11 @@ bool Alignment::Active::induce(ActiveInduceParameters pp, ActiveUpdateParameters
 								i++;
 							}
 						}
+						qqr.clear();
 						for (i = 0; i < nr; i++)
 							qqr.insert(vvr[i]);
 					}
-					if (ok && lla.size())
+					if (ok && (lla.size() || (this->decomp && this->historySparse && this->frameHistorys.size())))
 					{
 						auto za = eventsA.size(); 
 						auto na = lla.size()*frameUnderlyingsA.size();
@@ -904,6 +909,8 @@ bool Alignment::Active::induce(ActiveInduceParameters pp, ActiveUpdateParameters
 													}
 												}
 												auto w2 = it->second;
+												if (!w2)
+													break;
 												if (f)
 												{
 													auto x = w2 >> this->bits << this->bits;
@@ -975,6 +982,8 @@ bool Alignment::Active::induce(ActiveInduceParameters pp, ActiveUpdateParameters
 												}
 											}
 											auto w2 = it->second;
+											if (!w2)
+												break;
 											if (f)
 											{
 												auto x = w2 >> this->bits << this->bits;
@@ -994,7 +1003,7 @@ bool Alignment::Active::induce(ActiveInduceParameters pp, ActiveUpdateParameters
 									}
 								}
 								i++;
-							}										
+							}									
 						}						
 					}
 				}
@@ -1587,61 +1596,195 @@ bool Alignment::Active::induce(ActiveInduceParameters pp, ActiveUpdateParameters
 						for (auto eventB : eventsB)
 						{
 							SizeUCharStructList jj;
+							if (ok)
 							{
+								this->frameHistorys.erase(0);
+								SizeList frameUnderlyingsA;
+								if (this->frameUnderlyings.size())
+									frameUnderlyingsA.insert(frameUnderlyingsA.end(),this->frameUnderlyings.begin(), this->frameUnderlyings.end());
+								else
+									frameUnderlyingsA.push_back(0);
 								std::size_t m = 0;
 								for (auto& hr : this->underlyingHistoryRepa)
-									m += hr->dimension;
-								m += this->underlyingHistorySparse.size()*50;
+									m += hr->dimension*frameUnderlyingsA.size();
+								m += 50*this->underlyingHistorySparse.size()*frameUnderlyingsA.size();
+								m += 50*this->frameHistorys.size();
 								jj.reserve(m);
+								auto z = this->historySize;
+								auto over = this->historyOverflow;
 								auto j = eventB;
-								for (auto& hr : this->underlyingHistoryRepa)
+								for (auto f : frameUnderlyingsA)
 								{
-									auto n = hr->dimension;
-									auto vv = hr->vectorVar;
-									auto rr = hr->arr;	
-									for (std::size_t i = 0; i < n; i++)
+									auto& mm = this->framesVarsOffset[f];
+									for (auto& hr : this->underlyingHistoryRepa)
 									{
-										SizeUCharStruct qq;
-										qq.uchar = rr[j*n + i];			
-										if (qq.uchar)
+										auto n = hr->dimension;
+										auto vv = hr->vectorVar;
+										auto rr = hr->arr;	
+										for (std::size_t i = 0; i < n; i++)
 										{
-											qq.size = vv[i];
-											jj.push_back(qq);
+											SizeUCharStruct qq;
+											if (f <= j)
+												qq.uchar = rr[(j-f)*n + i];	
+											else if (f && over && z > f)
+												qq.uchar = rr[((j+z-f)%z)*n + i];	
+											else
+												qq.uchar = 0;
+											if (qq.uchar)
+											{
+												qq.size = vv[i];
+												if (f)
+												{
+													auto x = qq.size >> this->bits << this->bits;
+													auto it = mm.find(x);
+													if (it != mm.end())
+														qq.size += it->second;
+													else
+													{
+														auto y = this->system->next(this->bits);
+														mm[x] = y-x;
+														qq.size += y-x;
+													}
+												}
+												jj.push_back(qq);
+											}
+										}							
+									}
+									auto& slpp = this->underlyingSlicesParent;
+									for (auto& hr : this->underlyingHistorySparse)
+									{
+										std::size_t v = 0;
+										if (f <= j)
+											v = hr->arr[j-f];
+										else if (f && over && z > f)
+											v = hr->arr[(j+z-f)%z]; 
+										if (v)
+										{
+											{
+												SizeUCharStruct qq;
+												qq.uchar = 1;			
+												qq.size = v;
+												if (f)
+												{
+													auto x = qq.size >> this->bits << this->bits;
+													auto it = mm.find(x);
+													if (it != mm.end())
+														qq.size += it->second;
+													else
+													{
+														auto y = this->system->next(this->bits);
+														mm[x] = y-x;
+														qq.size += y-x;
+													}
+												}
+												jj.push_back(qq);
+											}								
+											auto it = slpp.find(v);
+											while (it != slpp.end())
+											{
+												SizeUCharStruct qq;
+												qq.uchar = 1;
+												qq.size = it->second;
+												if (!qq.size)
+													break;
+												if (f)
+												{
+													auto x = qq.size >> this->bits << this->bits;
+													auto it = mm.find(x);
+													if (it != mm.end())
+														qq.size += it->second;
+													else
+													{
+														auto y = this->system->next(this->bits);
+														mm[x] = y-x;
+														qq.size += y-x;
+													}
+												}
+												jj.push_back(qq);
+												it = slpp.find(it->second);
+											}										
 										}
-									}							
+									}										
 								}
-								auto& slpp = this->underlyingSlicesParent;
-								for (auto& hr : this->underlyingHistorySparse)
+								if (ok && this->decomp && this->historySparse && this->frameHistorys.size())
 								{
-									auto v = hr->arr[j];
+									auto& hr = this->historySparse;
+									auto& slpp = this->decomp->mapVarParent();
+									for (auto f : this->frameHistorys)
 									{
-										SizeUCharStruct qq;
-										qq.uchar = 1;			
-										qq.size = v;
-										jj.push_back(qq);
-									}								
-									auto it = slpp.find(v);
-									while (it != slpp.end())
-									{
-										SizeUCharStruct qq;
-										qq.uchar = 1;
-										qq.size = it->second;
-										jj.push_back(qq);
-										it = slpp.find(it->second);
-									}							
-								}						
+										auto& mm = this->framesVarsOffset[f];
+										std::size_t v = 0;
+										if (f <= j)
+											v = hr->arr[j-f];
+										else if (f && over && z > f)
+											v = hr->arr[(j+z-f)%z]; 
+										if (v)
+										{
+											{
+												SizeUCharStruct qq;
+												qq.uchar = 1;			
+												qq.size = v;
+												if (f)
+												{
+													auto x = qq.size >> this->bits << this->bits;
+													auto it = mm.find(x);
+													if (it != mm.end())
+														qq.size += it->second;
+													else
+													{
+														auto y = this->system->next(this->bits);
+														mm[x] = y-x;
+														qq.size += y-x;
+													}
+												}
+												jj.push_back(qq);
+											}								
+											auto it = slpp.find(v);
+											while (it != slpp.end())
+											{
+												SizeUCharStruct qq;
+												qq.uchar = 1;
+												qq.size = it->second;
+												if (!qq.size)
+													break;
+												if (f)
+												{
+													auto x = qq.size >> this->bits << this->bits;
+													auto it = mm.find(x);
+													if (it != mm.end())
+														qq.size += it->second;
+													else
+													{
+														auto y = this->system->next(this->bits);
+														mm[x] = y-x;
+														qq.size += y-x;
+													}
+												}
+												jj.push_back(qq);
+												it = slpp.find(it->second);
+											}										
+										}
+									}
+								}
 							}
-							auto ll = drmul(jj,*this->decomp,ppu.mapCapacity);	
-							ok = ok && ll && ll->size() && !ll->back();
-							if (!ok)
+							std::unique_ptr<SizeList> ll;
+							if (ok)
 							{
-								LOG "induce update\terror: drmul failed to return a list" UNLOG
-								break;
+								ll = drmul(jj,*this->decomp,ppu.mapCapacity);	
+								ok = ok && ll && ll->size() && !ll->back();
+								if (!ok)
+								{
+									LOG "induce update\terror: drmul failed to return a list" UNLOG
+									break;
+								}						
+							}							
+							if (ok)
+							{
+								std::size_t	sliceB = ll->back();
+								this->historySparse->arr[eventB] = sliceB;
+								this->historySlicesSetEvent[sliceB].insert(eventB);	
+								slices.insert(sliceB);									
 							}
-							std::size_t	sliceB = ll->back();
-							this->historySparse->arr[eventB] = sliceB;
-							this->historySlicesSetEvent[sliceB].insert(eventB);	
-							slices.insert(sliceB);							
 						}
 						if (!ok)
 							break;
