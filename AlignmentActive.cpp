@@ -1771,7 +1771,7 @@ bool Alignment::Active::induce(ActiveInduceParameters pp, ActiveUpdateParameters
 							if (ok)
 							{
 								ll = drmul(jj,*this->decomp,ppu.mapCapacity);	
-								ok = ok && ll && ll->size() && !ll->back();
+								ok = ok && ll && ll->size() && ll->back();
 								if (!ok)
 								{
 									LOG "induce update\terror: drmul failed to return a list" UNLOG
