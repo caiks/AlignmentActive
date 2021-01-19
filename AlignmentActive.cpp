@@ -1989,7 +1989,13 @@ bool Alignment::Active::dump(const ActiveIOParameters& pp)
 	{
 		LOG "dump error:\tfailed to dump to file: " << pp.filename << "\terror message: " << e.what()  UNLOG
 		ok = false;
-		out.close();			
+		try 
+		{
+			out.close();			
+		}
+		catch (const std::exception& e) 
+		{
+		}
 	}
 	
 	return ok;
@@ -2203,7 +2209,13 @@ bool Alignment::Active::load(const ActiveIOParameters& pp)
 	{
 		LOG "load error:\tfailed to load from file: " << pp.filename << "\terror message: " << e.what()  UNLOG
 		ok = false;
-		in.close();			
+		try 
+		{
+			in.close();			
+		}
+		catch (const std::exception& e) 
+		{
+		}	
 	}
 	
 	return ok;
