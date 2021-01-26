@@ -92,7 +92,7 @@ std::ostream& operator<<(std::ostream& out, const ActiveEventsArray& ev)
 	return out;
 }
 
-Active::Active(std::string nameA) : name(nameA),terminate(false), log(log_default), historyOverflow(false), historyEvent(0), historySize(0), bits(16), var(0), varSlice(0), induceThreshold(100), logging(false), updateCallback(0),  induceCallback(0)
+Active::Active(std::string nameA) : name(nameA), terminate(false), log(log_default), historyOverflow(false), historyEvent(0), historySize(0), bits(16), var(0), varSlice(0), induceThreshold(100), logging(false), summary(false), updateCallback(0),  induceCallback(0)
 {
 }
 
@@ -1029,6 +1029,8 @@ bool Alignment::Active::induce(ActiveInduceParameters pp, ActiveUpdateParameters
 			std::unique_ptr<FudRepa> fr;
 			std::size_t frSize = 0;
 			SizeList kk;
+			double algn = 0.0;
+			double diagonal = 0.0;
 			// induce model while unlocked
 			if (ok)
 			{
@@ -1292,8 +1294,6 @@ bool Alignment::Active::induce(ActiveInduceParameters pp, ActiveUpdateParameters
 					// layerer
 					if (ok)
 					{
-						double algn = 0.0;
-						double diagonal = 0.0;
 						try
 						{
 							SizeList vv;
@@ -1797,6 +1797,14 @@ bool Alignment::Active::induce(ActiveInduceParameters pp, ActiveUpdateParameters
 				if (ok && this->logging)
 				{
 					LOG "induce update\tslice: " << sliceA << "\tparent slice: " << v << "\tchildren cardinality: " << sl.size() << "\tfud size: " << this->decomp->fuds.back().fud.size() << "\tfud cardinality: " << this->decomp->fuds.size() << "\tmodel cardinality: " << this->decomp->fudRepasSize << "\ttime " << ((sec)(clk::now() - mark)).count() << "s" UNLOG
+				}	
+				if (ok && this->summary)
+				{
+					std::size_t sizeA = this->historyOverflow ? this->historySize : this->historyEvent;
+					if (sizeA)
+					{
+						LOG "induce summary\tslice: " << sliceA << "\tdiagonal: " << diagonal << "\tfud cardinality: " << this->decomp->fuds.size() << "\tmodel cardinality: " << this->decomp->fudRepasSize<< "\tfuds per threshold: " << (double)this->decomp->fuds.size() * this->induceThreshold / sizeA UNLOG					
+					}
 				}	
 				if (ok && induceCallback)
 				{

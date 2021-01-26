@@ -80,6 +80,7 @@ namespace Alignment
 		bool terminate;
 		void (*log)(const std::string&);
 		bool logging;
+		bool summary;
 		
 		std::mutex mutex;
 		
