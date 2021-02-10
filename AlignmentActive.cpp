@@ -26,7 +26,13 @@ const double repaRounding = 1e-6;
 typedef std::chrono::duration<double> sec;
 typedef std::chrono::high_resolution_clock clk;
 
-void log_default(const std::string& str)
+void log_default(Active& active, const std::string& str)
+{
+	std::cout << str << std::endl;
+	return;
+};
+
+void layerer_log_default(const std::string& str)
 {
 	std::cout << str << std::endl;
 	return;
@@ -92,7 +98,7 @@ std::ostream& operator<<(std::ostream& out, const ActiveEventsArray& ev)
 	return out;
 }
 
-Active::Active(std::string nameA) : name(nameA), terminate(false), log(log_default), historyOverflow(false), historyEvent(0), historySize(0), bits(16), var(0), varSlice(0), induceThreshold(100), logging(false), summary(false), updateCallback(0),  induceCallback(0)
+Active::Active(std::string nameA) : name(nameA), terminate(false), log(log_default), layerer_log(layerer_log_default), historyOverflow(false), historyEvent(0), historySize(0), bits(16), var(0), varSlice(0), induceThreshold(100), logging(false), summary(false), updateCallback(0),  induceCallback(0), client(0)
 {
 }
 
@@ -108,8 +114,8 @@ std::size_t Alignment::Active::varMax() const
 	return (((v >> this->bits) + 1) << this->bits) - 1;
 }
 
-#define UNLOG ; log_str.flush(); this->log(log_str.str());}
-#define LOG { std::ostringstream log_str; log_str << (this->name.size() ? this->name + "\t" : "") <<
+#define UNLOG ; log_str.flush(); this->log(*this, log_str.str());}
+#define LOG { std::ostringstream log_str; log_str << (this->name.size() ? this->name + "\t" : "") << 
 
 // event ids should be monotonic and updated no more than once
 bool Alignment::Active::update(ActiveUpdateParameters pp)
@@ -665,7 +671,7 @@ bool Alignment::Active::update(ActiveUpdateParameters pp)
 			}
 			if (ok && eventsA.size() && updateCallback)
 			{
-				ok = ok && updateCallback(eventsA,eventA,historyEventA,sliceA);
+				ok = ok && updateCallback(*this,eventsA,eventA,historyEventA,sliceA);
 			}
 		}
 	} 
@@ -1304,7 +1310,7 @@ bool Alignment::Active::induce(ActiveInduceParameters pp, ActiveUpdateParameters
 								for (std::size_t i = 0; i < n; i++)
 									vv.push_back(vv1[i]);
 							}
-							auto t = layerer(pp.wmax, pp.lmax, pp.xmax, pp.omax, pp.bmax, pp.mmax, pp.umax, pp.pmax, pp.tint, vv, *hr, *hrs, this->log, this->logging && pp.logging, varA);
+							auto t = layerer(pp.wmax, pp.lmax, pp.xmax, pp.omax, pp.bmax, pp.mmax, pp.umax, pp.pmax, pp.tint, vv, *hr, *hrs, layerer_log, this->logging && pp.logging, varA);
 							fr = std::move(std::get<0>(t));
 							auto mm = std::move(std::get<1>(t));
 							fail = !fr || (!mm || !mm->size());
@@ -1808,7 +1814,7 @@ bool Alignment::Active::induce(ActiveInduceParameters pp, ActiveUpdateParameters
 				}	
 				if (ok && induceCallback)
 				{
-					ok = ok && induceCallback(sliceA,sliceSizeA);
+					ok = ok && induceCallback(*this,sliceA,sliceSizeA);
 				}
 			}
 			if (ok && fail)

@@ -78,9 +78,12 @@ namespace Alignment
 		std::string name;
 		
 		bool terminate;
-		void (*log)(const std::string&);
+		void (*log)(Active& active, const std::string&);
+		void (*layerer_log)(const std::string&);
 		bool logging;
 		bool summary;
+		
+		void* client;
 		
 		std::mutex mutex;
 		
@@ -121,11 +124,11 @@ namespace Alignment
 		std::size_t varMax() const;
 		
 		bool update(ActiveUpdateParameters pp = ActiveUpdateParameters());
-		bool (*updateCallback)(const SizeSet& eventsA, std::size_t eventA, std::size_t historyEventA, std::size_t sliceA);
+		bool (*updateCallback)(Active& active, const SizeSet& eventsA, std::size_t eventA, std::size_t historyEventA, std::size_t sliceA);
 
 		bool induce(ActiveInduceParameters pp = ActiveInduceParameters(),
 					ActiveUpdateParameters ppu = ActiveUpdateParameters());
-		bool (*induceCallback)(std::size_t sliceA, std::size_t sliceSizeA);	
+		bool (*induceCallback)(Active& active, std::size_t sliceA, std::size_t sliceSizeA);	
 
 		bool dump(const ActiveIOParameters&);
 		bool load(const ActiveIOParameters&);	
