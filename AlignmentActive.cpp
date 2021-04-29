@@ -2241,10 +2241,11 @@ bool Alignment::Active::load(const ActiveIOParameters& pp)
 		{		
 			this->continousIs = false;
 			this->continousHistoryEventsEvent.clear();
-			in.exceptions(in.failbit | in.badbit);
+			in.exceptions(in.badbit);
 			in.read(reinterpret_cast<char*>(&this->continousIs), 1);
 			if (!in.eof())
 			{
+				in.clear();
 				in.exceptions(in.failbit | in.badbit | in.eofbit);
 				if (this->continousIs)
 				{
@@ -2260,6 +2261,7 @@ bool Alignment::Active::load(const ActiveIOParameters& pp)
 					}					
 				}				
 			}
+			in.clear();
 			in.exceptions(in.failbit | in.badbit | in.eofbit);
 		}		
 		in.close();
