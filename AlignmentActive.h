@@ -95,6 +95,9 @@ namespace Alignment
 		bool historyOverflow;
 		std::size_t historyEvent;
 		
+		bool continousIs;
+		SizeSizeMap continousHistoryEventsEvent;
+		
 		HistoryRepaPtrList underlyingHistoryRepa;
 		HistorySparseArrayPtrList underlyingHistorySparse;
 		SizeSizeUMap underlyingSlicesParent;

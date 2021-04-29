@@ -98,7 +98,7 @@ std::ostream& operator<<(std::ostream& out, const ActiveEventsArray& ev)
 	return out;
 }
 
-Active::Active(std::string nameA) : name(nameA), terminate(false), log(log_default), layerer_log(layerer_log_default), historyOverflow(false), historyEvent(0), historySize(0), bits(16), var(0), varSlice(0), induceThreshold(100), logging(false), summary(false), updateCallback(0),  induceCallback(0), client(0)
+Active::Active(std::string nameA) : name(nameA), terminate(false), log(log_default), layerer_log(layerer_log_default), historyOverflow(false), historyEvent(0), historySize(0), continousIs(false), bits(16), var(0), varSlice(0), induceThreshold(100), logging(false), summary(false), updateCallback(0),  induceCallback(0), client(0)
 {
 }
 
@@ -195,6 +195,7 @@ bool Alignment::Active::update(ActiveUpdateParameters pp)
 					break;
 				// get first new event id
 				eventA = *eventsA.begin();
+				bool continuousA = false;
 				if (ok && eventsUpdatedA.size())
 				{
 					for (auto eventB : eventsA)
@@ -203,6 +204,8 @@ bool Alignment::Active::update(ActiveUpdateParameters pp)
 							eventA = eventB;
 							break;
 						}
+					// check for discontinuity
+					continuousA = eventA == *eventsUpdatedA.rbegin() + 1;
 				}
 				// copy events to active history
 				if (ok)
@@ -559,6 +562,13 @@ bool Alignment::Active::update(ActiveUpdateParameters pp)
 							setA.insert(this->historyEvent);
 							if (this->induceThreshold && setA.size() == this->induceThreshold)
 								this->induceSlices.insert(sliceA);
+							if (this->continousIs)
+							{
+								if (continuousA)
+									this->continousHistoryEventsEvent.erase(this->historyEvent);
+								else
+									this->continousHistoryEventsEvent.insert_or_assign(this->historyEvent,eventA);
+							}							
 							if (sliceA)
 							{
 								auto& setB = this->historySlicesSetEvent[sliceB];
@@ -1993,6 +2003,20 @@ bool Alignment::Active::dump(const ActiveIOParameters& pp)
 				}
 			}
 		}
+		if (ok)
+		{		
+			out.write(reinterpret_cast<char*>(&this->continousIs), 1);
+			if (this->continousIs)
+			{
+				std::size_t hsize = this->continousHistoryEventsEvent.size();
+				out.write(reinterpret_cast<char*>(&hsize), sizeof(std::size_t));
+				for (auto& p : this->continousHistoryEventsEvent)	
+				{
+					out.write(reinterpret_cast<char*>((std::size_t*)&p.first), sizeof(std::size_t));
+					out.write(reinterpret_cast<char*>((std::size_t*)&p.second), sizeof(std::size_t));
+				}
+			}
+		}
 		out.close();
 		if (ok && this->logging)
 		{
@@ -2213,6 +2237,31 @@ bool Alignment::Active::load(const ActiveIOParameters& pp)
 				}
 			}	
 		}
+		if (ok)
+		{		
+			this->continousIs = false;
+			this->continousHistoryEventsEvent.clear();
+			in.exceptions(in.failbit | in.badbit);
+			in.read(reinterpret_cast<char*>(&this->continousIs), 1);
+			if (!in.eof())
+			{
+				in.exceptions(in.failbit | in.badbit | in.eofbit);
+				if (this->continousIs)
+				{
+					std::size_t hsize = 0;
+					in.read(reinterpret_cast<char*>(&hsize), sizeof(std::size_t));
+					for (std::size_t h = 0; ok && h < hsize; h++)	
+					{
+						std::size_t first;
+						in.read(reinterpret_cast<char*>(&first), sizeof(std::size_t));
+						std::size_t second;
+						in.read(reinterpret_cast<char*>(&second), sizeof(std::size_t));
+						this->continousHistoryEventsEvent.insert_or_assign(first,second);
+					}					
+				}				
+			}
+			in.exceptions(in.failbit | in.badbit | in.eofbit);
+		}		
 		in.close();
 		if (ok && this->logging)
 		{
