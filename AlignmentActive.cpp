@@ -572,7 +572,7 @@ bool Alignment::Active::update(ActiveUpdateParameters pp)
 										&& !mm.count(this->historyEvent+1))
 									mm.insert_or_assign(this->historyEvent+1,it->second+1);
 								else if (it != mm.end() 
-										&& this->historyOverflow 
+										&& this->historyEvent+1 == this->historySize
 										&& !mm.count(0))
 									mm.insert_or_assign(0,it->second+1);
 								if (continuousA)
