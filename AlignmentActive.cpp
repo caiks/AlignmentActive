@@ -564,10 +564,21 @@ bool Alignment::Active::update(ActiveUpdateParameters pp)
 								this->induceSlices.insert(sliceA);
 							if (this->continousIs)
 							{
+								auto& mm = this->continousHistoryEventsEvent;
+								auto it = mm.find(this->historyEvent);
+								if (it != mm.end() 
+										&& this->historyOverflow 
+										&& this->historyEvent+1 < this->historySize
+										&& !mm.count(this->historyEvent+1))
+									mm.insert_or_assign(this->historyEvent+1,it->second+1);
+								else if (it != mm.end() 
+										&& this->historyOverflow 
+										&& !mm.count(0))
+									mm.insert_or_assign(0,it->second+1);
 								if (continuousA)
-									this->continousHistoryEventsEvent.erase(this->historyEvent);
+									mm.erase(this->historyEvent);
 								else
-									this->continousHistoryEventsEvent.insert_or_assign(this->historyEvent,eventA);
+									mm.insert_or_assign(this->historyEvent,eventA);
 							}							
 							if (sliceA)
 							{
