@@ -340,6 +340,7 @@ bool Alignment::Active::update(ActiveUpdateParameters pp)
 									this->underlyingSlicesParent[rr1[i]] = rr1[i-1];
 					}
 				}
+				// check decomp exists
 				if (ok)
 				{
 					ok = ok && this->decomp;
@@ -767,7 +768,9 @@ bool Alignment::Active::induce(ActiveInduceParameters pp, ActiveUpdateParameters
 						if (sliceSizeB > sliceSizeA)
 						{
 							auto it = this->induceSliceFailsSize.find(sliceB);
-							if (it == this->induceSliceFailsSize.end() || it->second < sliceSizeB)
+							if (it == this->induceSliceFailsSize.end() 
+								|| (it->second < sliceSizeB 
+									&& (!pp.induceThresholds.size() || pp.induceThresholds.count(sliceSizeB))))
 							{
 								sliceA = sliceB;
 								sliceSizeA = sliceSizeB;							
@@ -1346,6 +1349,7 @@ bool Alignment::Active::induce(ActiveInduceParameters pp, ActiveUpdateParameters
 								auto m = kk.size();
 								auto z = hr->size;
 								diagonal = 100.0*(exp(algn/z/(m-1))-1.0);
+								fail = pp.diagonalMin > 0.0 && diagonal < pp.diagonalMin;
 							}
 						}
 						catch (const std::out_of_range& e)
@@ -1362,7 +1366,7 @@ bool Alignment::Active::induce(ActiveInduceParameters pp, ActiveUpdateParameters
 							}
 							else
 							{
-								LOG "induce model\tno alignment"  UNLOG
+								LOG "induce model\tno alignment\tder vars algn density: " << algn << "\timpl bi-valency percent: " << diagonal UNLOG
 							}
 						}	
 					}

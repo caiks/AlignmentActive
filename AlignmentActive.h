@@ -51,18 +51,20 @@ namespace Alignment
 	
 	struct ActiveInduceParameters
 	{
-		size_t tint = 1;		
-		size_t wmax = 18;
-		size_t lmax = 8;
-		size_t xmax = 128;
+		std::size_t tint = 1;		
+		std::size_t wmax = 18;
+		std::size_t lmax = 8;
+		std::size_t xmax = 128;
 		double znnmax = 60000.0 * 2.0 * 100.0 * 100.0;
-		size_t omax = 10;
-		size_t bmax = 10 * 3;
-		size_t mmax = 3;
-		size_t umax = 128;
-		size_t pmax = 1;
-		size_t mult = 1;
-		size_t seed = 5;
+		std::size_t omax = 10;
+		std::size_t bmax = 10 * 3;
+		std::size_t mmax = 3;
+		std::size_t umax = 128;
+		std::size_t pmax = 1;
+		std::size_t mult = 1;
+		std::size_t seed = 5;
+		double diagonalMin = 0.0;
+		std::set<std::size_t> induceThresholds;
 		bool logging = false;
 	};
 	
