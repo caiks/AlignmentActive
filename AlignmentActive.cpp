@@ -1849,7 +1849,7 @@ bool Alignment::Active::induce(ActiveInduceParameters pp, ActiveUpdateParameters
 				this->induceSliceFailsSize.insert_or_assign(sliceA, sliceSizeA);
 				if (ok && this->logging)
 				{
-					LOG "induce update fail\tslice: " << sliceA << "\tslice size: " << sliceSizeA  << "\ttime " << ((sec)(clk::now() - mark)).count() << "s" UNLOG
+					LOG "induce update fail\tslice: " << sliceA << "\tslice size: " << sliceSizeA << "\tfails: " << this->induceSliceFailsSize  << "\ttime " << ((sec)(clk::now() - mark)).count() << "s" UNLOG
 				}					
 			}
 		}
