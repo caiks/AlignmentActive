@@ -556,39 +556,66 @@ bool Alignment::Active::update(ActiveUpdateParameters pp)
 							break;
 						}	
 						std::size_t sliceB = this->historyOverflow ? this->historySparse->arr[this->historyEvent] : 0;
-						if (!sliceA || sliceA != sliceB)
+						// update history
+						if (!this->historyOverflow || sliceA != sliceB)
 						{
 							this->historySparse->arr[this->historyEvent] = sliceA;
 							auto& setA = this->historySlicesSetEvent[sliceA];
 							setA.insert(this->historyEvent);
 							if (this->induceThreshold && setA.size() == this->induceThreshold)
 								this->induceSlices.insert(sliceA);
-							if (this->continousIs)
-							{
-								auto& mm = this->continousHistoryEventsEvent;
-								auto it = mm.find(this->historyEvent);
-								if (it != mm.end() 
-										&& this->historyOverflow 
-										&& this->historyEvent+1 < this->historySize
-										&& !mm.count(this->historyEvent+1))
-									mm.insert_or_assign(this->historyEvent+1,it->second+1);
-								else if (it != mm.end() 
-										&& this->historyEvent+1 == this->historySize
-										&& !mm.count(0))
-									mm.insert_or_assign(0,it->second+1);
-								if (continuousA)
-									mm.erase(this->historyEvent);
-								else
-									mm.insert_or_assign(this->historyEvent,eventA);
-							}							
-							if (sliceA)
+							if (this->historyOverflow)
 							{
 								auto& setB = this->historySlicesSetEvent[sliceB];
 								setB.erase(this->historyEvent);
 								if (this->induceThreshold && setB.size() == this->induceThreshold-1)
 									this->induceSlices.erase(sliceB);
 							}
-						}					
+						}	
+						// handle discontinuities
+						if (this->continousIs)
+						{
+							auto& mm = this->continousHistoryEventsEvent;
+							auto it = mm.find(this->historyEvent);
+							if (it != mm.end() 
+									&& this->historyOverflow 
+									&& this->historyEvent+1 < this->historySize
+									&& !mm.count(this->historyEvent+1))
+								mm.insert_or_assign(this->historyEvent+1,it->second+1);
+							else if (it != mm.end() 
+									&& this->historyEvent+1 == this->historySize
+									&& !mm.count(0))
+								mm.insert_or_assign(0,it->second+1);
+							if (continuousA)
+								mm.erase(this->historyEvent);
+							else
+								mm.insert_or_assign(this->historyEvent,eventA);
+						}	
+						// handle cached sizes
+						if (historySliceCachingIs 
+							&& (!this->historyOverflow || sliceA != sliceB))
+						{
+							auto& cv = this->decomp->mapVarParent();
+							{
+								auto sliceC = sliceA;
+								do 
+								{
+									this->historySlicesSize[sliceC]++;
+									sliceC = cv[sliceC];
+								}								
+								while (sliceC);
+							}
+							if (this->historyOverflow)
+							{
+								auto sliceC = sliceB;
+								do 
+								{
+									this->historySlicesSize[sliceC]--;
+									sliceC = cv[sliceC];
+								}								
+								while (sliceC);
+							}
+						}
 					}
 					// create overlying event
 					if (ok && this->eventsSparse)

@@ -109,6 +109,9 @@ namespace Alignment
 		std::unique_ptr<HistorySparseArray> historySparse;
 		SizeSizeSetMap historySlicesSetEvent;
 		
+		bool historySliceCachingIs;
+		SizeSizeUMap historySlicesSize;
+			
 		ActiveEventsArrayPtr eventsSparse;
 		
 		std::shared_ptr<ActiveSystem> system;
