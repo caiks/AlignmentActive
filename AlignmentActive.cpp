@@ -592,10 +592,16 @@ bool Alignment::Active::update(ActiveUpdateParameters pp)
 								mm.insert_or_assign(this->historyEvent,eventA);
 						}	
 						// handle cached sizes
-						if (historySliceCachingIs 
-							&& (!this->historyOverflow || sliceA != sliceB))
+						if (this->historySliceCachingIs)
 						{
+							auto over = this->historyOverflow;
+							auto cont = this->continousIs;
+							auto& discont = this->continousHistoryEventsEvent;
+							auto z = this->historySize;
+							auto y = this->historyEvent;
+							auto rs = this->historySparse->arr;
 							auto& cv = this->decomp->mapVarParent();
+							if (!over || sliceA != sliceB)
 							{
 								auto sliceC = sliceA;
 								do 
@@ -605,16 +611,29 @@ bool Alignment::Active::update(ActiveUpdateParameters pp)
 								}								
 								while (sliceC);
 							}
-							if (this->historyOverflow)
+							if (over && sliceA != sliceB)
 							{
 								auto sliceC = sliceB;
 								do 
 								{
-									this->historySlicesSize[sliceC]--;
+									auto& c = this->historySlicesSize[sliceC];
+									if (c)
+										c--;
 									sliceC = cv[sliceC];
 								}								
 								while (sliceC);
 							}
+							if ((over || y) && (!cont || !discont.count(y)))
+							{
+								auto sliceC = rs[(over && !y) ? z-1 : y-1];	
+								if (sliceC != sliceA)
+								{
+									this->historySlicesSlicesSizeNext[sliceC][sliceA]++;
+									this->historySlicesSliceSetPrev[sliceA].insert(sliceC);
+								}
+								// TODO handle next if over
+							}
+							// TODO handle sliceB
 						}
 					}
 					// create overlying event
@@ -1587,6 +1606,7 @@ bool Alignment::Active::induce(ActiveInduceParameters pp, ActiveUpdateParameters
 					for (auto s : sl)
 						cv[s] = sliceA;
 				}
+				// check historySparse
 				if (ok)
 				{
 					ok = ok && this->historySparse && this->historySparse->arr;
@@ -1597,6 +1617,7 @@ bool Alignment::Active::induce(ActiveInduceParameters pp, ActiveUpdateParameters
 					}
 				}
 				// update historySparse and historySlicesSetEvent
+				SizeSet slices;
 				if (ok)
 				{
 					if (sliceA)
@@ -1622,7 +1643,6 @@ bool Alignment::Active::induce(ActiveInduceParameters pp, ActiveUpdateParameters
 					auto z = hr->size;
 					auto rr = hr->arr;	
 					auto ev = eventsA.data();
-					SizeSet slices;
 					for (std::size_t j = 0; j < z; j++)
 						for (std::size_t i = 0; i < n; i++)
 						{
@@ -1847,11 +1867,17 @@ bool Alignment::Active::induce(ActiveInduceParameters pp, ActiveUpdateParameters
 						if (!ok)
 							break;
 						for (auto sliceB : slices)
-							if (this->historySlicesSetEvent[sliceB].size() >= induceThreshold)
+							if (this->induceThreshold && this->historySlicesSetEvent[sliceB].size() >= induceThreshold)
 								this->induceSlices.insert(sliceB);
 					}
 					this->historySlicesSetEvent.erase(sliceA);
 				}
+				// handle cached sizes
+				if (ok && historySliceCachingIs)
+				{
+					for (auto sliceB : slices)
+						this->historySlicesSize[sliceB] = this->historySlicesSetEvent[sliceB].size();
+				}				
 				if (ok && this->logging)
 				{
 					LOG "induce update\tslice: " << sliceA << "\tparent slice: " << v << "\tchildren cardinality: " << sl.size() << "\tfud size: " << this->decomp->fuds.back().fud.size() << "\tfud cardinality: " << this->decomp->fuds.size() << "\tmodel cardinality: " << this->decomp->fudRepasSize << "\ttime " << ((sec)(clk::now() - mark)).count() << "s" UNLOG
@@ -2307,6 +2333,49 @@ bool Alignment::Active::load(const ActiveIOParameters& pp)
 			in.exceptions(in.failbit | in.badbit | in.eofbit);
 		}		
 		in.close();
+		if (ok && historySliceCachingIs && this->decomp && this->historySparse)
+		{
+			this->historySlicesSize.clear();
+			this->historySlicesSlicesSizeNext.clear();
+			this->historySlicesSliceSetPrev.clear();
+			auto over = this->historyOverflow;
+			auto cont = this->continousIs;
+			auto& discont = this->continousHistoryEventsEvent;
+			auto z = this->historySize;
+			auto y = this->historyEvent;
+			auto rs = this->historySparse->arr;
+			auto& cv = this->decomp->mapVarParent();
+			for (auto pp :  this->historySlicesSetEvent)
+			{
+				auto sliceC = pp.first;
+				auto a = pp.second.size();
+				do 
+				{
+					this->historySlicesSize[sliceC] += a;
+					sliceC = cv[sliceC];
+				}								
+				while (sliceC);
+			}	
+			{
+				auto j = over ? y : z;	
+				auto sliceB = rs[j%z];
+				j++;
+				while (j < y+z)
+				{
+					auto sliceC = rs[j%z];
+					if (sliceC != sliceB)
+					{
+						if (!cont || !discont.count(j%z))
+						{
+							this->historySlicesSlicesSizeNext[sliceB][sliceC]++;
+							this->historySlicesSliceSetPrev[sliceC].insert(sliceB);
+						}
+						sliceB = sliceC;
+					}
+					j++;
+				}					
+			}
+		}			
 		if (ok && this->logging)
 		{
 			LOG "load\tfile name: " << pp.filename << "\ttime " << ((sec)(clk::now() - mark)).count() << "s" UNLOG
