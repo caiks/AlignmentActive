@@ -572,26 +572,54 @@ bool Alignment::Active::update(ActiveUpdateParameters pp)
 									this->induceSlices.erase(sliceB);
 							}
 						}	
+						// handle next transition
+						if (this->historySliceCachingIs && this->historyOverflow)
+						{
+							auto cont = this->continousIs;
+							auto& discont = this->continousHistoryEventsEvent;
+							auto z = this->historySize;
+							auto y = this->historyEvent;
+							auto rs = this->historySparse->arr;
+							auto& nexts = this->historySlicesSlicesSizeNext;
+							auto& prevs = this->historySlicesSliceSetPrev;
+							if (!cont || !discont.count((y+1)%z))
+							{
+								auto sliceC = rs[(y+1)%z];	
+								if (sliceC != sliceB)
+								{
+									auto& c = nexts[sliceB][sliceC];
+									if (c > 1)
+										c--;
+									else
+									{		
+										nexts[sliceB].erase(sliceC);
+										if (!nexts[sliceB].size())
+											nexts.erase(sliceB);
+										prevs[sliceC].erase(sliceB);
+										if (!prevs[sliceC].size())
+											prevs.erase(sliceC);
+									}
+								}
+							}
+						}
 						// handle discontinuities
 						if (this->continousIs)
 						{
-							auto& mm = this->continousHistoryEventsEvent;
-							auto it = mm.find(this->historyEvent);
-							if (it != mm.end() 
-									&& this->historyOverflow 
-									&& this->historyEvent+1 < this->historySize
-									&& !mm.count(this->historyEvent+1))
-								mm.insert_or_assign(this->historyEvent+1,it->second+1);
-							else if (it != mm.end() 
-									&& this->historyEvent+1 == this->historySize
-									&& !mm.count(0))
-								mm.insert_or_assign(0,it->second+1);
+							auto over = this->historyOverflow;
+							auto& discont = this->continousHistoryEventsEvent;
+							auto z = this->historySize;
+							auto y = this->historyEvent;
+							auto it = discont.find(y);
+							if (it != discont.end() && over && y+1 < z && !discont.count(y+1))
+								discont.insert_or_assign(y+1,it->second+1);
+							else if (it != discont.end() && y+1 == z && !discont.count(0))
+								discont.insert_or_assign(0,it->second+1);
 							if (continuousA)
-								mm.erase(this->historyEvent);
+								discont.erase(y);
 							else
-								mm.insert_or_assign(this->historyEvent,eventA);
+								discont.insert_or_assign(y,eventA);
 						}	
-						// handle cached sizes
+						// handle cached sizes and prev transition
 						if (this->historySliceCachingIs)
 						{
 							auto over = this->historyOverflow;
@@ -600,13 +628,16 @@ bool Alignment::Active::update(ActiveUpdateParameters pp)
 							auto z = this->historySize;
 							auto y = this->historyEvent;
 							auto rs = this->historySparse->arr;
+							auto& sizes = this->historySlicesSize;
+							auto& nexts = this->historySlicesSlicesSizeNext;
+							auto& prevs = this->historySlicesSliceSetPrev;
 							auto& cv = this->decomp->mapVarParent();
 							if (!over || sliceA != sliceB)
 							{
 								auto sliceC = sliceA;
 								do 
 								{
-									this->historySlicesSize[sliceC]++;
+									sizes[sliceC]++;
 									sliceC = cv[sliceC];
 								}								
 								while (sliceC);
@@ -616,9 +647,11 @@ bool Alignment::Active::update(ActiveUpdateParameters pp)
 								auto sliceC = sliceB;
 								do 
 								{
-									auto& c = this->historySlicesSize[sliceC];
-									if (c)
+									auto& c = sizes[sliceC];
+									if (c > 1)
 										c--;
+									else
+										sizes.erase(sliceC);
 									sliceC = cv[sliceC];
 								}								
 								while (sliceC);
@@ -628,12 +661,10 @@ bool Alignment::Active::update(ActiveUpdateParameters pp)
 								auto sliceC = rs[(over && !y) ? z-1 : y-1];	
 								if (sliceC != sliceA)
 								{
-									this->historySlicesSlicesSizeNext[sliceC][sliceA]++;
-									this->historySlicesSliceSetPrev[sliceA].insert(sliceC);
+									nexts[sliceC][sliceA]++;
+									prevs[sliceA].insert(sliceC);
 								}
-								// TODO handle next if over
 							}
-							// TODO handle sliceB
 						}
 					}
 					// create overlying event
@@ -1873,10 +1904,58 @@ bool Alignment::Active::induce(ActiveInduceParameters pp, ActiveUpdateParameters
 					this->historySlicesSetEvent.erase(sliceA);
 				}
 				// handle cached sizes
-				if (ok && historySliceCachingIs)
+				if (ok && this->historySliceCachingIs)
 				{
+					auto over = this->historyOverflow;
+					auto cont = this->continousIs;
+					auto& discont = this->continousHistoryEventsEvent;
+					auto z = this->historySize;
+					auto y = this->historyEvent;
+					auto rs = this->historySparse->arr;
+					auto& sizes = this->historySlicesSize;
+					auto& nexts = this->historySlicesSlicesSizeNext;
+					auto& prevs = this->historySlicesSliceSetPrev;					
+					for (auto sliceC : prevs[sliceA])
+					{
+						nexts[sliceC].erase(sliceA);
+						if (!nexts[sliceC].size())
+							nexts.erase(sliceC);
+					}
+					for (auto pp : nexts[sliceA])
+					{
+						auto sliceC = pp.first;
+						prevs[sliceC].erase(sliceA);
+						if (!prevs[sliceC].size())
+							prevs.erase(sliceC);
+					}
+					prevs.erase(sliceA);
+					nexts.erase(sliceA);
 					for (auto sliceB : slices)
-						this->historySlicesSize[sliceB] = this->historySlicesSetEvent[sliceB].size();
+					{
+						auto& events = this->historySlicesSetEvent[sliceB];
+						sizes[sliceB] = events.size();
+						for (auto ev : events)
+						{
+							if ((over || ev) && (!cont || !discont.count(ev)))
+							{
+								auto sliceC = rs[(over && !ev) ? z-1 : ev-1];	
+								if (sliceC != sliceB)
+								{
+									nexts[sliceC][sliceB]++;
+									prevs[sliceB].insert(sliceC);
+								}
+							}		
+							if (over && ev != y && (!cont || !discont.count((ev+1)%z)))
+							{
+								auto sliceC = rs[(ev+1)%z];		
+								if (sliceC != sliceB)
+								{
+									nexts[sliceB][sliceC]++;
+									prevs[sliceC].insert(sliceB);
+								}
+							}								
+						}
+					}
 				}				
 				if (ok && this->logging)
 				{
@@ -2344,6 +2423,9 @@ bool Alignment::Active::load(const ActiveIOParameters& pp)
 			auto z = this->historySize;
 			auto y = this->historyEvent;
 			auto rs = this->historySparse->arr;
+			auto& sizes = this->historySlicesSize;
+			auto& nexts = this->historySlicesSlicesSizeNext;
+			auto& prevs = this->historySlicesSliceSetPrev;
 			auto& cv = this->decomp->mapVarParent();
 			for (auto pp :  this->historySlicesSetEvent)
 			{
@@ -2351,7 +2433,7 @@ bool Alignment::Active::load(const ActiveIOParameters& pp)
 				auto a = pp.second.size();
 				do 
 				{
-					this->historySlicesSize[sliceC] += a;
+					sizes[sliceC] += a;
 					sliceC = cv[sliceC];
 				}								
 				while (sliceC);
@@ -2367,8 +2449,8 @@ bool Alignment::Active::load(const ActiveIOParameters& pp)
 					{
 						if (!cont || !discont.count(j%z))
 						{
-							this->historySlicesSlicesSizeNext[sliceB][sliceC]++;
-							this->historySlicesSliceSetPrev[sliceC].insert(sliceB);
+							nexts[sliceB][sliceC]++;
+							prevs[sliceC].insert(sliceB);
 						}
 						sliceB = sliceC;
 					}
