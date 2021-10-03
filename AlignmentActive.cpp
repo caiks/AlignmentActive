@@ -569,7 +569,12 @@ bool Alignment::Active::update(ActiveUpdateParameters pp)
 								auto& setB = this->historySlicesSetEvent[sliceB];
 								setB.erase(this->historyEvent);
 								if (this->induceThreshold && setB.size() == this->induceThreshold-1)
+								{
 									this->induceSlices.erase(sliceB);
+									this->induceSliceFailsSize.erase(sliceB);
+								}
+								if (!setB.size())
+									this->historySlicesSetEvent.erase(sliceB);
 							}
 						}	
 						// handle next transition
@@ -635,26 +640,28 @@ bool Alignment::Active::update(ActiveUpdateParameters pp)
 							if (!over || sliceA != sliceB)
 							{
 								auto sliceC = sliceA;
-								do 
+								while (true)
 								{
 									sizes[sliceC]++;
+									if (!sliceC)
+										break;
 									sliceC = cv[sliceC];
 								}								
-								while (sliceC);
 							}
 							if (over && sliceA != sliceB)
 							{
 								auto sliceC = sliceB;
-								do 
+								while (true)
 								{
 									auto& c = sizes[sliceC];
 									if (c > 1)
 										c--;
 									else
 										sizes.erase(sliceC);
+									if (!sliceC)
+										break;
 									sliceC = cv[sliceC];
 								}								
-								while (sliceC);
 							}
 							if ((over || y) && (!cont || !discont.count(y)))
 							{
@@ -1648,7 +1655,6 @@ bool Alignment::Active::induce(ActiveInduceParameters pp, ActiveUpdateParameters
 					}
 				}
 				// update historySparse and historySlicesSetEvent
-				SizeSet slices;
 				if (ok)
 				{
 					if (sliceA)
@@ -1674,6 +1680,7 @@ bool Alignment::Active::induce(ActiveInduceParameters pp, ActiveUpdateParameters
 					auto z = hr->size;
 					auto rr = hr->arr;	
 					auto ev = eventsA.data();
+					SizeSet slices;
 					for (std::size_t j = 0; j < z; j++)
 						for (std::size_t i = 0; i < n; i++)
 						{
@@ -1930,30 +1937,33 @@ bool Alignment::Active::induce(ActiveInduceParameters pp, ActiveUpdateParameters
 					}
 					prevs.erase(sliceA);
 					nexts.erase(sliceA);
-					for (auto sliceB : slices)
+					for (auto sliceB : sl)
 					{
-						auto& events = this->historySlicesSetEvent[sliceB];
-						sizes[sliceB] = events.size();
-						for (auto ev : events)
+						auto it = this->historySlicesSetEvent.find(sliceB);
+						if (it != this->historySlicesSetEvent.end())
 						{
-							if ((over || ev) && (!cont || !discont.count(ev)))
+							sizes[sliceB] = it->second.size();
+							for (auto ev : it->second)
 							{
-								auto sliceC = rs[(over && !ev) ? z-1 : ev-1];	
-								if (sliceC != sliceB)
+								if ((over || ev) && (!cont || !discont.count(ev)))
 								{
-									nexts[sliceC][sliceB]++;
-									prevs[sliceB].insert(sliceC);
-								}
-							}		
-							if (over && ev != y && (!cont || !discont.count((ev+1)%z)))
-							{
-								auto sliceC = rs[(ev+1)%z];		
-								if (sliceC != sliceB)
+									auto sliceC = rs[(over && !ev) ? z-1 : ev-1];	
+									if (sliceC != sliceB)
+									{
+										nexts[sliceC][sliceB]++;
+										prevs[sliceB].insert(sliceC);
+									}
+								}		
+								if (over && ev != y && (!cont || !discont.count((ev+1)%z)))
 								{
-									nexts[sliceB][sliceC]++;
-									prevs[sliceC].insert(sliceB);
-								}
-							}								
+									auto sliceC = rs[(ev+1)%z];		
+									if (sliceC != sliceB)
+									{
+										nexts[sliceB][sliceC]++;
+										prevs[sliceC].insert(sliceB);
+									}
+								}								
+							}
 						}
 					}
 				}				
@@ -2431,12 +2441,15 @@ bool Alignment::Active::load(const ActiveIOParameters& pp)
 			{
 				auto sliceC = pp.first;
 				auto a = pp.second.size();
-				do 
+				sizes[sliceC] += a;
+				sliceC = cv[sliceC];
+				while (true)
 				{
 					sizes[sliceC] += a;
+					if (!sliceC)
+						break;
 					sliceC = cv[sliceC];
 				}								
-				while (sliceC);
 			}	
 			{
 				auto j = over ? y : z;	
