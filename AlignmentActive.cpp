@@ -2179,9 +2179,16 @@ bool Alignment::Active::dump(const ActiveIOParameters& pp)
 		// trace sizes and transitions
 		if (ok && historySliceCachingIs && this->decomp && this->historySparse)
 		{
-			auto& sizes = this->historySlicesSize;
-			auto& nexts = this->historySlicesSlicesSizeNext;
-			auto& prevs = this->historySlicesSliceSetPrev;
+			SizeSizeMap sizes;
+			SizeSizeMap nexts;
+			SizeSizeMap prevs;
+			for (auto& pp : this->historySlicesSize)
+				sizes[pp.first] = pp.second;
+			for (auto& pp : this->historySlicesSlicesSizeNext)
+				for (auto& qq : pp.second)
+					nexts[pp.first] += qq.second;
+			for (auto& pp : this->historySlicesSliceSetPrev)
+				prevs[pp.first] = pp.second.size();
 			EVAL(sizes);
 			EVAL(nexts);
 			EVAL(prevs);			
@@ -2436,9 +2443,6 @@ bool Alignment::Active::load(const ActiveIOParameters& pp)
 		// cache sizes and transitions
 		if (ok && historySliceCachingIs && this->decomp && this->historySparse)
 		{
-			this->historySlicesSize.clear();
-			this->historySlicesSlicesSizeNext.clear();
-			this->historySlicesSliceSetPrev.clear();
 			auto over = this->historyOverflow;
 			auto cont = this->continousIs;
 			auto& discont = this->continousHistoryEventsEvent;
@@ -2450,6 +2454,12 @@ bool Alignment::Active::load(const ActiveIOParameters& pp)
 			auto& nexts = this->historySlicesSlicesSizeNext;
 			auto& prevs = this->historySlicesSliceSetPrev;
 			auto& cv = this->decomp->mapVarParent();
+			sizes.clear();
+			nexts.clear();
+			prevs.clear();
+			sizes.reserve(slices.size()*3);
+			nexts.reserve(slices.size());
+			prevs.reserve(slices.size());
 			for (auto pp : slices)
 			{
 				auto sliceC = pp.first;
@@ -2481,10 +2491,24 @@ bool Alignment::Active::load(const ActiveIOParameters& pp)
 					j++;
 				}					
 			}
+		}	
+		// trace sizes and transitions
+		if (ok && historySliceCachingIs && this->decomp && this->historySparse)
+		{
+			SizeSizeMap sizes;
+			SizeSizeMap nexts;
+			SizeSizeMap prevs;
+			for (auto& pp : this->historySlicesSize)
+				sizes[pp.first] = pp.second;
+			for (auto& pp : this->historySlicesSlicesSizeNext)
+				for (auto& qq : pp.second)
+					nexts[pp.first] += qq.second;
+			for (auto& pp : this->historySlicesSliceSetPrev)
+				prevs[pp.first] = pp.second.size();
 			EVAL(sizes);
 			EVAL(nexts);
-			EVAL(prevs);
-		}			
+			EVAL(prevs);			
+		}		
 		if (ok && this->logging)
 		{
 			LOG "load\tfile name: " << pp.filename << "\ttime " << ((sec)(clk::now() - mark)).count() << "s" UNLOG
