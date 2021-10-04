@@ -1910,7 +1910,7 @@ bool Alignment::Active::induce(ActiveInduceParameters pp, ActiveUpdateParameters
 					}
 					this->historySlicesSetEvent.erase(sliceA);
 				}
-				// handle cached sizes
+				// handle cached sizes and transitions
 				if (ok && this->historySliceCachingIs)
 				{
 					auto over = this->historyOverflow;
@@ -1919,6 +1919,7 @@ bool Alignment::Active::induce(ActiveInduceParameters pp, ActiveUpdateParameters
 					auto z = this->historySize;
 					auto y = this->historyEvent;
 					auto rs = this->historySparse->arr;
+					auto& slices = this->historySlicesSetEvent;
 					auto& sizes = this->historySlicesSize;
 					auto& nexts = this->historySlicesSlicesSizeNext;
 					auto& prevs = this->historySlicesSliceSetPrev;					
@@ -1939,11 +1940,11 @@ bool Alignment::Active::induce(ActiveInduceParameters pp, ActiveUpdateParameters
 					nexts.erase(sliceA);
 					for (auto sliceB : sl)
 					{
-						auto it = this->historySlicesSetEvent.find(sliceB);
-						if (it != this->historySlicesSetEvent.end())
+						auto slicesIt = slices.find(sliceB);
+						if (slicesIt != slices.end())
 						{
-							sizes[sliceB] = it->second.size();
-							for (auto ev : it->second)
+							sizes[sliceB] = slicesIt->second.size();
+							for (auto ev : slicesIt->second)
 							{
 								if ((over || ev) && (!cont || !discont.count(ev)))
 								{
@@ -2175,6 +2176,16 @@ bool Alignment::Active::dump(const ActiveIOParameters& pp)
 			}
 		}
 		out.close();
+		// trace sizes and transitions
+		if (ok && historySliceCachingIs && this->decomp && this->historySparse)
+		{
+			auto& sizes = this->historySlicesSize;
+			auto& nexts = this->historySlicesSlicesSizeNext;
+			auto& prevs = this->historySlicesSliceSetPrev;
+			EVAL(sizes);
+			EVAL(nexts);
+			EVAL(prevs);			
+		}
 		if (ok && this->logging)
 		{
 			LOG "dump\tfile name: " << pp.filename << "\ttime " << ((sec)(clk::now() - mark)).count() << "s" UNLOG
@@ -2422,6 +2433,7 @@ bool Alignment::Active::load(const ActiveIOParameters& pp)
 			in.exceptions(in.failbit | in.badbit | in.eofbit);
 		}		
 		in.close();
+		// cache sizes and transitions
 		if (ok && historySliceCachingIs && this->decomp && this->historySparse)
 		{
 			this->historySlicesSize.clear();
@@ -2433,16 +2445,15 @@ bool Alignment::Active::load(const ActiveIOParameters& pp)
 			auto z = this->historySize;
 			auto y = this->historyEvent;
 			auto rs = this->historySparse->arr;
+			auto& slices = this->historySlicesSetEvent;
 			auto& sizes = this->historySlicesSize;
 			auto& nexts = this->historySlicesSlicesSizeNext;
 			auto& prevs = this->historySlicesSliceSetPrev;
 			auto& cv = this->decomp->mapVarParent();
-			for (auto pp :  this->historySlicesSetEvent)
+			for (auto pp : slices)
 			{
 				auto sliceC = pp.first;
 				auto a = pp.second.size();
-				sizes[sliceC] += a;
-				sliceC = cv[sliceC];
 				while (true)
 				{
 					sizes[sliceC] += a;
@@ -2470,6 +2481,9 @@ bool Alignment::Active::load(const ActiveIOParameters& pp)
 					j++;
 				}					
 			}
+			EVAL(sizes);
+			EVAL(nexts);
+			EVAL(prevs);
 		}			
 		if (ok && this->logging)
 		{
