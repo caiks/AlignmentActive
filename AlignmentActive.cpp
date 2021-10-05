@@ -98,7 +98,7 @@ std::ostream& operator<<(std::ostream& out, const ActiveEventsArray& ev)
 	return out;
 }
 
-Active::Active(std::string nameA) : name(nameA), terminate(false), log(log_default), layerer_log(layerer_log_default), historyOverflow(false), historyEvent(0), historySize(0), continousIs(false), bits(16), var(0), varSlice(0), induceThreshold(100), logging(false), summary(false), updateCallback(0),  induceCallback(0), client(0)
+Active::Active(std::string nameA) : name(nameA), terminate(false), log(log_default), layerer_log(layerer_log_default), historyOverflow(false), historyEvent(0), historySize(0), continousIs(false), bits(16), var(0), varSlice(0), induceThreshold(100), logging(false), summary(false), updateCallback(0),  induceCallback(0), client(0), historySliceCachingIs(false)
 {
 }
 
