@@ -1955,7 +1955,7 @@ bool Alignment::Active::induce(ActiveInduceParameters pp, ActiveUpdateParameters
 										prevs[sliceB].insert(sliceC);
 									}
 								}		
-								if ((over || ev != y) && (!cont || !discont.count((ev+1)%z)))
+								if ((over || ev < y-1) && (!cont || !discont.count((ev+1)%z)))
 								{
 									auto sliceC = rs[(ev+1)%z];		
 									if (sliceC != sliceB)
