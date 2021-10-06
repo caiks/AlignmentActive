@@ -577,36 +577,6 @@ bool Alignment::Active::update(ActiveUpdateParameters pp)
 									this->historySlicesSetEvent.erase(sliceB);
 							}
 						}	
-						// handle next transition
-						if (this->historySliceCachingIs && this->historyOverflow)
-						{
-							auto cont = this->continousIs;
-							auto& discont = this->continousHistoryEventsEvent;
-							auto z = this->historySize;
-							auto y = this->historyEvent;
-							auto rs = this->historySparse->arr;
-							auto& nexts = this->historySlicesSlicesSizeNext;
-							auto& prevs = this->historySlicesSliceSetPrev;
-							if (!cont || !discont.count((y+1)%z))
-							{
-								auto sliceC = rs[(y+1)%z];	
-								if (sliceC != sliceB)
-								{
-									auto& c = nexts[sliceB][sliceC];
-									if (c > 1)
-										c--;
-									else
-									{		
-										nexts[sliceB].erase(sliceC);
-										if (!nexts[sliceB].size())
-											nexts.erase(sliceB);
-										prevs[sliceC].erase(sliceB);
-										if (!prevs[sliceC].size())
-											prevs.erase(sliceC);
-									}
-								}
-							}
-						}
 						// handle discontinuities
 						if (this->continousIs)
 						{
@@ -665,7 +635,7 @@ bool Alignment::Active::update(ActiveUpdateParameters pp)
 							}
 							if ((over || y) && (!cont || !discont.count(y)))
 							{
-								auto sliceC = rs[(over && !y) ? z-1 : y-1];	
+								auto sliceC = rs[(y+z-1)%z];	
 								if (sliceC != sliceA)
 								{
 									nexts[sliceC][sliceA]++;
@@ -1938,34 +1908,38 @@ bool Alignment::Active::induce(ActiveInduceParameters pp, ActiveUpdateParameters
 					}
 					prevs.erase(sliceA);
 					nexts.erase(sliceA);
+					SizeSet events;
 					for (auto sliceB : sl)
 					{
 						auto slicesIt = slices.find(sliceB);
 						if (slicesIt != slices.end())
 						{
 							sizes[sliceB] = slicesIt->second.size();
-							for (auto ev : slicesIt->second)
-							{
-								if ((over || ev) && (!cont || !discont.count(ev)))
-								{
-									auto sliceC = rs[(over && !ev) ? z-1 : ev-1];	
-									if (sliceC != sliceB)
-									{
-										nexts[sliceC][sliceB]++;
-										prevs[sliceB].insert(sliceC);
-									}
-								}		
-								if ((over || ev < y-1) && (!cont || !discont.count((ev+1)%z)))
-								{
-									auto sliceC = rs[(ev+1)%z];		
-									if (sliceC != sliceB)
-									{
-										nexts[sliceB][sliceC]++;
-										prevs[sliceC].insert(sliceB);
-									}
-								}								
-							}
+							events.insert(slicesIt->second.begin(),slicesIt->second.end());
 						}
+					}
+					for (auto ev : events)
+					{
+						auto sliceB = rs[ev];	
+						if ((over || ev) && ev != y && (!cont || !discont.count(ev)))
+						{
+							auto sliceC = rs[(ev+z-1)%z];	
+							if (sliceC != sliceB)
+							{
+								nexts[sliceC][sliceB]++;
+								prevs[sliceB].insert(sliceC);
+							}
+						}		
+						if (!events.count((ev+1)%z) 
+							&& ev != y-1 && (!cont || !discont.count((ev+1)%z)))
+						{
+							auto sliceC = rs[(ev+1)%z];		
+							if (sliceC != sliceB)
+							{
+								nexts[sliceB][sliceC]++;
+								prevs[sliceC].insert(sliceB);
+							}
+						}								
 					}
 				}				
 				if (ok && this->logging)
@@ -2179,6 +2153,8 @@ bool Alignment::Active::dump(const ActiveIOParameters& pp)
 		// trace sizes and transitions
 		if (ok && historySliceCachingIs && this->decomp && this->historySparse)
 		{
+			auto& discont = this->continousHistoryEventsEvent;
+			EVAL(discont);
 			SizeSizeMap sizes;
 			SizeSizeMap nexts;
 			SizeSizeMap prevs;
@@ -2507,6 +2483,8 @@ bool Alignment::Active::load(const ActiveIOParameters& pp)
 		// trace sizes and transitions
 		if (ok && historySliceCachingIs && this->decomp && this->historySparse)
 		{
+			auto& discont = this->continousHistoryEventsEvent;
+			EVAL(discont);
 			SizeSizeMap sizes;
 			SizeSizeMap nexts;
 			SizeSizeMap prevs;
