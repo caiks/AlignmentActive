@@ -1955,7 +1955,7 @@ bool Alignment::Active::induce(ActiveInduceParameters pp, ActiveUpdateParameters
 										prevs[sliceB].insert(sliceC);
 									}
 								}		
-								if (over && ev != y && (!cont || !discont.count((ev+1)%z)))
+								if ((over || ev != y) && (!cont || !discont.count((ev+1)%z)))
 								{
 									auto sliceC = rs[(ev+1)%z];		
 									if (sliceC != sliceB)
@@ -2190,8 +2190,20 @@ bool Alignment::Active::dump(const ActiveIOParameters& pp)
 			for (auto& pp : this->historySlicesSliceSetPrev)
 				prevs[pp.first] = pp.second.size();
 			EVAL(sizes);
+			std::size_t size = 0;
+			for (auto& pp : sizes)			
+				size += pp.second;
+			EVAL(size);
 			EVAL(nexts);
+			std::size_t next = 0;
+			for (auto& pp : nexts)			
+				next += pp.second;
+			EVAL(next);
 			EVAL(prevs);			
+			std::size_t prev = 0;
+			for (auto& pp : prevs)			
+				prev += pp.second;		
+			EVAL(prev);
 		}
 		if (ok && this->logging)
 		{
@@ -2506,8 +2518,20 @@ bool Alignment::Active::load(const ActiveIOParameters& pp)
 			for (auto& pp : this->historySlicesSliceSetPrev)
 				prevs[pp.first] = pp.second.size();
 			EVAL(sizes);
+			std::size_t size = 0;
+			for (auto& pp : sizes)			
+				size += pp.second;
+			EVAL(size);
 			EVAL(nexts);
+			std::size_t next = 0;
+			for (auto& pp : nexts)			
+				next += pp.second;
+			EVAL(next);
 			EVAL(prevs);			
+			std::size_t prev = 0;
+			for (auto& pp : prevs)			
+				prev += pp.second;		
+			EVAL(prev);		
 		}		
 		if (ok && this->logging)
 		{
