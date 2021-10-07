@@ -577,6 +577,36 @@ bool Alignment::Active::update(ActiveUpdateParameters pp)
 									this->historySlicesSetEvent.erase(sliceB);
 							}
 						}	
+						// handle next transition
+						if (this->historySliceCachingIs && this->historyOverflow)
+						{
+							auto cont = this->continousIs;
+							auto& discont = this->continousHistoryEventsEvent;
+							auto z = this->historySize;
+							auto y = this->historyEvent;
+							auto rs = this->historySparse->arr;
+							auto& nexts = this->historySlicesSlicesSizeNext;
+							auto& prevs = this->historySlicesSliceSetPrev;
+							if (!cont || !discont.count((y+1)%z))
+							{
+								auto sliceC = rs[(y+1)%z];	
+								if (sliceC != sliceB)
+								{
+									auto& c = nexts[sliceB][sliceC];
+									if (c > 1)
+										c--;
+									else
+									{		
+										nexts[sliceB].erase(sliceC);
+										if (!nexts[sliceB].size())
+											nexts.erase(sliceB);
+										prevs[sliceC].erase(sliceB);
+										if (!prevs[sliceC].size())
+											prevs.erase(sliceC);
+									}
+								}
+							}
+						}
 						// handle discontinuities
 						if (this->continousIs)
 						{
