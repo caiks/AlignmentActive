@@ -98,7 +98,7 @@ std::ostream& operator<<(std::ostream& out, const ActiveEventsArray& ev)
 	return out;
 }
 
-Active::Active(std::string nameA) : name(nameA), terminate(false), log(log_default), layerer_log(layerer_log_default), historyOverflow(false), historyEvent(0), historySize(0), continousIs(false), bits(16), var(0), varSlice(0), induceThreshold(100), logging(false), summary(false), updateCallback(0),  induceCallback(0), client(0), historySliceCachingIs(false)
+Active::Active(std::string nameA) : name(nameA), terminate(false), log(log_default), layerer_log(layerer_log_default), historyOverflow(false), historyEvent(0), historySize(0), continousIs(false), bits(16), var(0), varSlice(0), induceThreshold(100), logging(false), summary(false), updateCallback(0),  induceCallback(0), client(0), historySliceCachingIs(false), historySliceCumulativeIs(false)
 {
 }
 
@@ -578,7 +578,8 @@ bool Alignment::Active::update(ActiveUpdateParameters pp)
 							}
 						}	
 						// handle next transition
-						if (this->historySliceCachingIs && this->historyOverflow)
+						if (this->historySliceCachingIs && !this->historySliceCumulativeIs 
+							&& this->historyOverflow)
 						{
 							auto cont = this->continousIs;
 							auto& discont = this->continousHistoryEventsEvent;
@@ -627,6 +628,7 @@ bool Alignment::Active::update(ActiveUpdateParameters pp)
 						// handle cached sizes and prev transition
 						if (this->historySliceCachingIs)
 						{
+							auto cumulative = this->historySliceCumulativeIs;
 							auto over = this->historyOverflow;
 							auto cont = this->continousIs;
 							auto& discont = this->continousHistoryEventsEvent;
@@ -648,7 +650,7 @@ bool Alignment::Active::update(ActiveUpdateParameters pp)
 									sliceC = cv[sliceC];
 								}								
 							}
-							if (over && sliceA != sliceB)
+							if (!cumulative && over && sliceA != sliceB)
 							{
 								auto sliceC = sliceB;
 								while (true)
@@ -2179,9 +2181,59 @@ bool Alignment::Active::dump(const ActiveIOParameters& pp)
 				}
 			}
 		}
+		if (ok && this->historySliceCumulativeIs)
+		{
+			out.write(reinterpret_cast<char*>(&this->historySliceCumulativeIs), 1);
+			if (this->historySliceCumulativeIs)
+			{
+				auto& sizes = this->historySlicesSize;
+				auto& nexts = this->historySlicesSlicesSizeNext;
+				auto& prevs = this->historySlicesSliceSetPrev;
+				{
+					std::size_t hsize = sizes.size();
+					out.write(reinterpret_cast<char*>(&hsize), sizeof(std::size_t));
+					for (auto& p : sizes)	
+					{
+						out.write(reinterpret_cast<char*>((std::size_t*)&p.first), sizeof(std::size_t));
+						out.write(reinterpret_cast<char*>((std::size_t*)&p.second), sizeof(std::size_t));
+					}
+				}
+				{
+					std::size_t hsize = nexts.size();
+					out.write(reinterpret_cast<char*>(&hsize), sizeof(std::size_t));
+					for (auto& p : nexts)	
+					{
+						std::size_t i = p.first;
+						out.write(reinterpret_cast<char*>(&i), sizeof(std::size_t));
+						std::size_t msize = p.second.size();
+						out.write(reinterpret_cast<char*>(&msize), sizeof(std::size_t));
+						for (auto q : p.second)	
+						{
+							out.write(reinterpret_cast<char*>((std::size_t*)&q.first), sizeof(std::size_t));
+							out.write(reinterpret_cast<char*>((std::size_t*)&q.second), sizeof(std::size_t));
+						}
+					}
+				}
+				{
+					std::size_t hsize = prevs.size();
+					out.write(reinterpret_cast<char*>(&hsize), sizeof(std::size_t));
+					for (auto& p : prevs)	
+					{
+						std::size_t i = p.first;
+						out.write(reinterpret_cast<char*>(&i), sizeof(std::size_t));
+						std::size_t msize = p.second.size();
+						out.write(reinterpret_cast<char*>(&msize), sizeof(std::size_t));
+						for (auto q : p.second)	
+						{
+							out.write(reinterpret_cast<char*>((std::size_t*)&q), sizeof(std::size_t));
+						}
+					}
+				}				
+			}
+		}
 		out.close();
 		// trace sizes and transitions
-		if (ok && historySliceCachingIs && this->decomp && this->historySparse)
+		if (ok && this->historySliceCachingIs)
 		{
 			auto& discont = this->continousHistoryEventsEvent;
 			EVAL(discont);
@@ -2456,10 +2508,82 @@ bool Alignment::Active::load(const ActiveIOParameters& pp)
 			}
 			in.clear();
 			in.exceptions(in.failbit | in.badbit | in.eofbit);
-		}		
+		}	
+		if (ok)
+		{		
+			auto& sizes = this->historySlicesSize;
+			auto& nexts = this->historySlicesSlicesSizeNext;
+			auto& prevs = this->historySlicesSliceSetPrev;
+			sizes.clear();
+			nexts.clear();
+			prevs.clear();
+			this->historySliceCumulativeIs = false;
+			in.exceptions(in.badbit);
+			in.read(reinterpret_cast<char*>(&this->historySliceCumulativeIs), 1);
+			if (!in.eof())
+			{
+				in.clear();
+				in.exceptions(in.failbit | in.badbit | in.eofbit);
+				if (this->historySliceCumulativeIs)
+				{
+					this->historySliceCachingIs = true;
+					{
+						std::size_t hsize = 0;
+						in.read(reinterpret_cast<char*>(&hsize), sizeof(std::size_t));
+						for (std::size_t h = 0; ok && h < hsize; h++)	
+						{
+							std::size_t sliceA;
+							in.read(reinterpret_cast<char*>(&sliceA), sizeof(std::size_t));
+							std::size_t count;
+							in.read(reinterpret_cast<char*>(&count), sizeof(std::size_t));
+							sizes[sliceA] = count;
+						}								
+					}
+					{
+						std::size_t hsize = 0;
+						in.read(reinterpret_cast<char*>(&hsize), sizeof(std::size_t));
+						for (std::size_t h = 0; ok && h < hsize; h++)	
+						{
+							std::size_t sliceA = 0;
+							in.read(reinterpret_cast<char*>(&sliceA), sizeof(std::size_t));
+							std::size_t msize = 0;
+							in.read(reinterpret_cast<char*>(&msize), sizeof(std::size_t));
+							for (std::size_t m = 0; ok && m < msize; m++)	
+							{							
+								std::size_t sliceB;
+								in.read(reinterpret_cast<char*>(&sliceB), sizeof(std::size_t));
+								std::size_t count;
+								in.read(reinterpret_cast<char*>(&count), sizeof(std::size_t));
+								nexts[sliceA][sliceB] = count;
+							}	
+						}
+					}
+					{
+						std::size_t hsize = 0;
+						in.read(reinterpret_cast<char*>(&hsize), sizeof(std::size_t));
+						for (std::size_t h = 0; ok && h < hsize; h++)	
+						{
+							std::size_t sliceA = 0;
+							in.read(reinterpret_cast<char*>(&sliceA), sizeof(std::size_t));
+							std::size_t msize = 0;
+							in.read(reinterpret_cast<char*>(&msize), sizeof(std::size_t));
+							for (std::size_t m = 0; ok && m < msize; m++)	
+							{							
+								std::size_t sliceB;
+								in.read(reinterpret_cast<char*>(&sliceB), sizeof(std::size_t));
+								prevs[sliceA].insert(sliceB);
+							}	
+						}
+					}
+				}				
+			}
+			in.clear();
+			in.exceptions(in.failbit | in.badbit | in.eofbit);
+		}			
 		in.close();
 		// cache sizes and transitions
-		if (ok && historySliceCachingIs && this->decomp && this->historySparse)
+		if (ok && historySliceCachingIs && !this->historySliceCumulativeIs 
+			&& this->decomp && this->historySparse)
 		{
 			auto over = this->historyOverflow;
 			auto cont = this->continousIs;
@@ -2511,7 +2635,7 @@ bool Alignment::Active::load(const ActiveIOParameters& pp)
 			}
 		}	
 		// trace sizes and transitions
-		if (ok && historySliceCachingIs && this->decomp && this->historySparse)
+		if (ok && historySliceCachingIs)
 		{
 			auto& discont = this->continousHistoryEventsEvent;
 			EVAL(discont);

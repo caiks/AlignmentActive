@@ -110,6 +110,7 @@ namespace Alignment
 		SizeSizeSetMap historySlicesSetEvent;
 		
 		bool historySliceCachingIs;
+		bool historySliceCumulativeIs;
 		SizeSizeUMap historySlicesSize;
 		std::unordered_map<std::size_t, SizeSizeMap> historySlicesSlicesSizeNext;
 		std::unordered_map<std::size_t, SizeSet> historySlicesSliceSetPrev;
