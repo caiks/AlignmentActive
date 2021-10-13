@@ -639,7 +639,7 @@ bool Alignment::Active::update(ActiveUpdateParameters pp)
 							auto& nexts = this->historySlicesSlicesSizeNext;
 							auto& prevs = this->historySlicesSliceSetPrev;
 							auto& cv = this->decomp->mapVarParent();
-							if (!over || sliceA != sliceB)
+							if (cumulative || !over || sliceA != sliceB)
 							{
 								auto sliceC = sliceA;
 								while (true)
@@ -2181,7 +2181,7 @@ bool Alignment::Active::dump(const ActiveIOParameters& pp)
 				}
 			}
 		}
-		if (ok && this->historySliceCumulativeIs)
+		if (ok)
 		{
 			out.write(reinterpret_cast<char*>(&this->historySliceCumulativeIs), 1);
 			if (this->historySliceCumulativeIs)
