@@ -2232,36 +2232,38 @@ bool Alignment::Active::dump(const ActiveIOParameters& pp)
 			}
 		}
 		out.close();
-		// trace sizes and transitions
-		if (ok && this->historySliceCachingIs)
 		{
-			auto& discont = this->continousHistoryEventsEvent;
-			EVAL(discont);
-			SizeSizeMap sizes;
-			SizeSizeMap nexts;
-			SizeSizeMap prevs;
-			for (auto& pp : this->historySlicesSize)
-				sizes[pp.first] = pp.second;
-			for (auto& pp : this->historySlicesSlicesSizeNext)
-				for (auto& qq : pp.second)
-					nexts[pp.first] += qq.second;
-			for (auto& pp : this->historySlicesSliceSetPrev)
-				prevs[pp.first] = pp.second.size();
-			EVAL(sizes);
-			std::size_t size = 0;
-			for (auto& pp : sizes)			
-				size += pp.second;
-			EVAL(size);
-			EVAL(nexts);
-			std::size_t next = 0;
-			for (auto& pp : nexts)			
-				next += pp.second;
-			EVAL(next);
-			EVAL(prevs);			
-			std::size_t prev = 0;
-			for (auto& pp : prevs)			
-				prev += pp.second;		
-			EVAL(prev);
+		// // trace sizes and transitions
+		// if (ok && this->historySliceCachingIs)
+		// {
+			// auto& discont = this->continousHistoryEventsEvent;
+			// EVAL(discont);
+			// SizeSizeMap sizes;
+			// SizeSizeMap nexts;
+			// SizeSizeMap prevs;
+			// for (auto& pp : this->historySlicesSize)
+				// sizes[pp.first] = pp.second;
+			// for (auto& pp : this->historySlicesSlicesSizeNext)
+				// for (auto& qq : pp.second)
+					// nexts[pp.first] += qq.second;
+			// for (auto& pp : this->historySlicesSliceSetPrev)
+				// prevs[pp.first] = pp.second.size();
+			// EVAL(sizes);
+			// std::size_t size = 0;
+			// for (auto& pp : sizes)			
+				// size += pp.second;
+			// EVAL(size);
+			// EVAL(nexts);
+			// std::size_t next = 0;
+			// for (auto& pp : nexts)			
+				// next += pp.second;
+			// EVAL(next);
+			// EVAL(prevs);			
+			// std::size_t prev = 0;
+			// for (auto& pp : prevs)			
+				// prev += pp.second;		
+			// EVAL(prev);
+		// }			
 		}
 		if (ok && this->logging)
 		{
@@ -2634,37 +2636,39 @@ bool Alignment::Active::load(const ActiveIOParameters& pp)
 				}					
 			}
 		}	
-		// trace sizes and transitions
-		if (ok && historySliceCachingIs)
 		{
-			auto& discont = this->continousHistoryEventsEvent;
-			EVAL(discont);
-			SizeSizeMap sizes;
-			SizeSizeMap nexts;
-			SizeSizeMap prevs;
-			for (auto& pp : this->historySlicesSize)
-				sizes[pp.first] = pp.second;
-			for (auto& pp : this->historySlicesSlicesSizeNext)
-				for (auto& qq : pp.second)
-					nexts[pp.first] += qq.second;
-			for (auto& pp : this->historySlicesSliceSetPrev)
-				prevs[pp.first] = pp.second.size();
-			EVAL(sizes);
-			std::size_t size = 0;
-			for (auto& pp : sizes)			
-				size += pp.second;
-			EVAL(size);
-			EVAL(nexts);
-			std::size_t next = 0;
-			for (auto& pp : nexts)			
-				next += pp.second;
-			EVAL(next);
-			EVAL(prevs);			
-			std::size_t prev = 0;
-			for (auto& pp : prevs)			
-				prev += pp.second;		
-			EVAL(prev);		
-		}		
+		// // trace sizes and transitions
+		// if (ok && historySliceCachingIs)
+		// {
+			// auto& discont = this->continousHistoryEventsEvent;
+			// EVAL(discont);
+			// SizeSizeMap sizes;
+			// SizeSizeMap nexts;
+			// SizeSizeMap prevs;
+			// for (auto& pp : this->historySlicesSize)
+				// sizes[pp.first] = pp.second;
+			// for (auto& pp : this->historySlicesSlicesSizeNext)
+				// for (auto& qq : pp.second)
+					// nexts[pp.first] += qq.second;
+			// for (auto& pp : this->historySlicesSliceSetPrev)
+				// prevs[pp.first] = pp.second.size();
+			// EVAL(sizes);
+			// std::size_t size = 0;
+			// for (auto& pp : sizes)			
+				// size += pp.second;
+			// EVAL(size);
+			// EVAL(nexts);
+			// std::size_t next = 0;
+			// for (auto& pp : nexts)			
+				// next += pp.second;
+			// EVAL(next);
+			// EVAL(prevs);			
+			// std::size_t prev = 0;
+			// for (auto& pp : prevs)			
+				// prev += pp.second;		
+			// EVAL(prev);		
+		// }		
+		}
 		if (ok && this->logging)
 		{
 			LOG "load\tfile name: " << pp.filename << "\ttime " << ((sec)(clk::now() - mark)).count() << "s" UNLOG
