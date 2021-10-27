@@ -128,8 +128,14 @@ namespace Alignment
 		SizeSet induceVarExclusions;
 		SizeSizeMap induceSliceFailsSize;
 		
-		SizeSet frameUnderlyings;
-		SizeSet frameHistorys;
+		// if underlying current frame 0 is present in any it must be the first of all
+		// if dynamic pad out empty frames with 0 so that frame vector length is constant
+		bool frameUnderlyingDynamicIs;
+		SizeList frameUnderlyings;
+		SizeListList historyFrameUnderlying;
+		bool frameHistoryDynamicIs;
+		SizeList frameHistorys;
+		SizeListList historyFrameHistory;
 		std::map<std::size_t, SizeSizeUMap> framesVarsOffset;		
 		
 		std::size_t varMax() const;

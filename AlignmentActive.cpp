@@ -98,7 +98,7 @@ std::ostream& operator<<(std::ostream& out, const ActiveEventsArray& ev)
 	return out;
 }
 
-Active::Active(std::string nameA) : name(nameA), terminate(false), log(log_default), layerer_log(layerer_log_default), historyOverflow(false), historyEvent(0), historySize(0), continousIs(false), bits(16), var(0), varSlice(0), induceThreshold(100), logging(false), summary(false), updateCallback(0),  induceCallback(0), client(0), historySliceCachingIs(false), historySliceCumulativeIs(false)
+Active::Active(std::string nameA) : name(nameA), terminate(false), log(log_default), layerer_log(layerer_log_default), historyOverflow(false), historyEvent(0), historySize(0), continousIs(false), bits(16), var(0), varSlice(0), induceThreshold(100), logging(false), summary(false), updateCallback(0),  induceCallback(0), client(0), historySliceCachingIs(false), historySliceCumulativeIs(false), frameUnderlyingDynamicIs(false),frameHistoryDynamicIs(false)
 {
 }
 
@@ -365,10 +365,9 @@ bool Alignment::Active::update(ActiveUpdateParameters pp)
 					SizeUCharStructList jj;
 					if (ok)
 					{
-						this->frameHistorys.erase(0);
 						SizeList frameUnderlyingsA;
 						if (this->frameUnderlyings.size())
-							frameUnderlyingsA.insert(frameUnderlyingsA.end(),this->frameUnderlyings.begin(), this->frameUnderlyings.end());
+							frameUnderlyingsA = this->frameUnderlyings;
 						else
 							frameUnderlyingsA.push_back(0);
 						std::size_t m = 0;
@@ -380,9 +379,12 @@ bool Alignment::Active::update(ActiveUpdateParameters pp)
 						auto z = this->historySize;
 						auto over = this->historyOverflow;
 						auto j = this->historyEvent;
-						for (auto f : frameUnderlyingsA)
+						for (std::size_t g = 0; g < frameUnderlyingsA.size(); g++)
 						{
-							auto& mm = this->framesVarsOffset[f];
+							auto f = frameUnderlyingsA[g];
+							if (g && !f)
+								continue;
+							auto& mm = this->framesVarsOffset[g];
 							for (auto& hr : this->underlyingHistoryRepa)
 							{
 								auto n = hr->dimension;
@@ -477,9 +479,12 @@ bool Alignment::Active::update(ActiveUpdateParameters pp)
 						{
 							auto& hr = this->historySparse;
 							auto& slpp = this->decomp->mapVarParent();
-							for (auto f : this->frameHistorys)
+							for (std::size_t g = 0; g < this->frameHistorys.size(); g++)
 							{
-								auto& mm = this->framesVarsOffset[f];
+								auto f = this->frameHistorys[g];
+								if (!f)
+									continue;
+								auto& mm = this->framesVarsOffset[g];
 								std::size_t v = 0;
 								if (f <= j)
 									v = hr->arr[j-f];
@@ -702,6 +707,26 @@ bool Alignment::Active::update(ActiveUpdateParameters pp)
 				// increment historyEvent
 				if (ok)
 				{
+					if (this->frameUnderlyingDynamicIs)
+					{
+						if (this->historyFrameUnderlying.size() < this->historySize)
+						{
+							this->historyFrameUnderlying.reserve(this->historySize);
+							this->historyFrameUnderlying.resize(this->historySize);
+						}
+						this->historyFrameUnderlying[this->historyEvent] = this->frameUnderlyings;
+						this->historyFrameUnderlying[this->historyEvent].shrink_to_fit();
+					}
+					if (this->frameHistoryDynamicIs)
+					{
+						if (this->historyFrameHistory.size() < this->historySize)
+						{
+							this->historyFrameHistory.reserve(this->historySize);
+							this->historyFrameHistory.resize(this->historySize);
+						}
+						this->historyFrameHistory[this->historyEvent] = this->frameHistorys;
+						this->historyFrameHistory[this->historyEvent].shrink_to_fit();
+					}
 					historyEventA = this->historyEvent;
 					this->historyEvent++;
 					if (this->historyEvent >= this->historySize)
@@ -873,12 +898,6 @@ bool Alignment::Active::induce(ActiveInduceParameters pp, ActiveUpdateParameters
 					varA = this->var;
 					auto& setEventsA = this->historySlicesSetEvent[sliceA];
 					eventsA.insert(eventsA.end(),setEventsA.begin(),setEventsA.end());
-					this->frameHistorys.erase(0);
-					SizeList frameUnderlyingsA;
-					if (this->frameUnderlyings.size())
-						frameUnderlyingsA.insert(frameUnderlyingsA.end(),this->frameUnderlyings.begin(), this->frameUnderlyings.end());
-					else
-						frameUnderlyingsA.push_back(0);
 					if (ok && llr.size())
 					{
 						auto& qqx = this->induceVarExclusions;					
@@ -894,6 +913,11 @@ bool Alignment::Active::induce(ActiveInduceParameters pp, ActiveUpdateParameters
 							}
 						}
 					}
+					SizeList frameUnderlyingsA;
+					if (this->frameUnderlyings.size())
+						frameUnderlyingsA = this->frameUnderlyings;
+					else
+						frameUnderlyingsA.push_back(0);
 					if (ok && qqr.size())
 					{
 						hrr = std::make_unique<HistoryRepa>();
@@ -912,13 +936,14 @@ bool Alignment::Active::induce(ActiveInduceParameters pp, ActiveUpdateParameters
 						auto z = this->historySize;
 						auto over = this->historyOverflow;
 						std::size_t i = 0;
-						for (auto f : frameUnderlyingsA)
+						for (std::size_t g = 0; g < frameUnderlyingsA.size(); g++)
 						{
-							auto& mm = this->framesVarsOffset[f];
+							auto f = frameUnderlyingsA[g];
+							auto& mm = this->framesVarsOffset[g];
 							for (auto v : qqr)
 							{
 								vvr[i] = v;
-								if (f)
+								if (g || f)
 								{
 									auto x = vvr[i] >> this->bits << this->bits;
 									auto it = mm.find(x);
@@ -943,12 +968,24 @@ bool Alignment::Active::induce(ActiveInduceParameters pp, ActiveUpdateParameters
 										shr[i] = hr->shape[k];
 										auto izr = i*zr;
 										for (std::size_t j = 0; j < zr; j++)
-											if (f <= ev[j])
+										{
+											if (this->frameUnderlyingDynamicIs)
+											{
+												f = 0;
+												auto& frameUnderlyingsB = this->historyFrameUnderlying[ev[j]];
+												if (g < frameUnderlyingsB.size())
+													f = frameUnderlyingsB[g];
+											}
+											if (g && !f)
+												rrr[izr + j] = 0;					
+											else if (f <= ev[j])
 												rrr[izr + j] = rr[(ev[j]-f)*n + k];
 											else if (f && over && z > f)
 												rrr[izr + j] = rr[((ev[j]+z-f)%z)*n + k];
 											else
-												rrr[izr + j] = 0;
+												rrr[izr + j] = 0;					
+										}
+
 										break;
 									}
 								}
@@ -978,16 +1015,26 @@ bool Alignment::Active::induce(ActiveInduceParameters pp, ActiveUpdateParameters
 						if (ok)
 						{
 							auto& slpp = this->underlyingSlicesParent;
-							for (auto f : frameUnderlyingsA)
+							for (std::size_t g = 0; g < frameUnderlyingsA.size(); g++)
 							{
-								auto& mm = this->framesVarsOffset[f];
+								auto f = frameUnderlyingsA[g];
+								auto& mm = this->framesVarsOffset[g];
 								for (auto& hr : lla)
 								{
 									auto rr = hr->arr;
 									for (std::size_t j = 0; j < za; j++)
 									{
+										if (this->frameUnderlyingDynamicIs)
+										{
+											f = 0;
+											auto& frameUnderlyingsB = this->historyFrameUnderlying[ev[j]];
+											if (g < frameUnderlyingsB.size())
+												f = frameUnderlyingsB[g];
+										}
 										std::size_t v = 0;
-										if (f <= ev[j])
+										if (g && !f)
+											v = 0;					
+										else if (f <= ev[j])
 											v = rr[ev[j]-f];
 										else if (f && over && z > f)
 											v = rr[(ev[j]+z-f)%z];
@@ -1053,14 +1100,24 @@ bool Alignment::Active::induce(ActiveInduceParameters pp, ActiveUpdateParameters
 						{
 							auto& hr = this->historySparse;
 							auto& slpp = this->decomp->mapVarParent();
-							for (auto f : this->frameHistorys)
+							for (std::size_t g = 0; g < this->frameHistorys.size(); g++)
 							{
-								auto& mm = this->framesVarsOffset[f];
+								auto f = this->frameHistorys[g];
+								auto& mm = this->framesVarsOffset[g];
 								auto rr = hr->arr;
 								for (std::size_t j = 0; j < za; j++)
 								{
+									if (this->frameHistoryDynamicIs)
+									{
+										f = 0;
+										auto& frameHistorysB = this->historyFrameHistory[ev[j]];
+										if (g < frameHistorysB.size())
+											f = frameHistorysB[g];
+									}
 									std::size_t v = 0;
-									if (f <= ev[j])
+									if (!f)
+										v = 0;									
+									else if (f <= ev[j])
 										v = rr[ev[j]-f];
 									else if (f && over && z > f)
 										v = rr[(ev[j]+z-f)%z];
@@ -1716,10 +1773,9 @@ bool Alignment::Active::induce(ActiveInduceParameters pp, ActiveUpdateParameters
 							SizeUCharStructList jj;
 							if (ok)
 							{
-								this->frameHistorys.erase(0);
 								SizeList frameUnderlyingsA;
 								if (this->frameUnderlyings.size())
-									frameUnderlyingsA.insert(frameUnderlyingsA.end(),this->frameUnderlyings.begin(), this->frameUnderlyings.end());
+									frameUnderlyingsA = this->frameUnderlyings;
 								else
 									frameUnderlyingsA.push_back(0);
 								std::size_t m = 0;
@@ -1731,9 +1787,20 @@ bool Alignment::Active::induce(ActiveInduceParameters pp, ActiveUpdateParameters
 								auto z = this->historySize;
 								auto over = this->historyOverflow;
 								auto j = eventB;
-								for (auto f : frameUnderlyingsA)
+								for (std::size_t g = 0; g < frameUnderlyingsA.size(); g++)
 								{
-									auto& mm = this->framesVarsOffset[f];
+									std::size_t f = 0;
+									if (this->frameUnderlyingDynamicIs)
+									{
+										auto& frameUnderlyingsB = this->historyFrameUnderlying[j];
+										if (g < frameUnderlyingsB.size())
+											f = frameUnderlyingsB[g];
+									}
+									else
+										f = frameUnderlyingsA[g];
+									if (g && !f)
+										continue;
+									auto& mm = this->framesVarsOffset[g];
 									for (auto& hr : this->underlyingHistoryRepa)
 									{
 										auto n = hr->dimension;
@@ -1828,9 +1895,20 @@ bool Alignment::Active::induce(ActiveInduceParameters pp, ActiveUpdateParameters
 								{
 									auto& hr = this->historySparse;
 									auto& slpp = this->decomp->mapVarParent();
-									for (auto f : this->frameHistorys)
+									for (std::size_t g = 0; g < this->frameHistorys.size(); g++)
 									{
-										auto& mm = this->framesVarsOffset[f];
+										std::size_t f = 0;
+										if (this->frameHistoryDynamicIs)
+										{
+											auto& frameHistorysB = this->historyFrameHistory[j];
+											if (g < frameHistorysB.size())
+												f = frameHistorysB[g];
+										}
+										else
+											f = frameHistorys[g];
+										if (!f)
+											continue;
+										auto& mm = this->framesVarsOffset[g];
 										std::size_t v = 0;
 										if (f <= j)
 											v = hr->arr[j-f];
@@ -2446,7 +2524,7 @@ bool Alignment::Active::load(const ActiveIOParameters& pp)
 			{
 				std::size_t v;
 				in.read(reinterpret_cast<char*>(&v), sizeof(std::size_t));
-				this->frameUnderlyings.insert(v);
+				this->frameUnderlyings.push_back(v);
 			}	
 		}
 		if (ok)
@@ -2458,7 +2536,7 @@ bool Alignment::Active::load(const ActiveIOParameters& pp)
 			{
 				std::size_t v;
 				in.read(reinterpret_cast<char*>(&v), sizeof(std::size_t));
-				this->frameHistorys.insert(v);
+				this->frameHistorys.push_back(v);
 			}	
 		}
 		if (ok)
