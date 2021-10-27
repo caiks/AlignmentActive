@@ -709,22 +709,20 @@ bool Alignment::Active::update(ActiveUpdateParameters pp)
 				{
 					if (this->frameUnderlyingDynamicIs)
 					{
-						if (this->historyFrameUnderlying.size() < this->historySize)
-						{
-							this->historyFrameUnderlying.reserve(this->historySize);
-							this->historyFrameUnderlying.resize(this->historySize);
-						}
-						this->historyFrameUnderlying[this->historyEvent] = this->frameUnderlyings;
+						this->historyFrameUnderlying.reserve(this->historySize);
+						if (this->historyEvent < this->historyFrameUnderlying.size())
+							this->historyFrameUnderlying[this->historyEvent] = this->frameUnderlyings;
+						else 
+							this->historyFrameUnderlying.push_back(this->frameUnderlyings);
 						this->historyFrameUnderlying[this->historyEvent].shrink_to_fit();
 					}
 					if (this->frameHistoryDynamicIs)
 					{
-						if (this->historyFrameHistory.size() < this->historySize)
-						{
-							this->historyFrameHistory.reserve(this->historySize);
-							this->historyFrameHistory.resize(this->historySize);
-						}
-						this->historyFrameHistory[this->historyEvent] = this->frameHistorys;
+						this->historyFrameHistory.reserve(this->historySize);
+						if (this->historyEvent < this->historyFrameHistory.size())
+							this->historyFrameHistory[this->historyEvent] = this->frameHistorys;
+						else 
+							this->historyFrameHistory.push_back(this->frameHistorys);
 						this->historyFrameHistory[this->historyEvent].shrink_to_fit();
 					}
 					historyEventA = this->historyEvent;
@@ -2309,6 +2307,38 @@ bool Alignment::Active::dump(const ActiveIOParameters& pp)
 				}				
 			}
 		}
+		if (ok)
+		{		
+			out.write(reinterpret_cast<char*>(&this->frameUnderlyingDynamicIs), 1);
+			if (this->frameUnderlyingDynamicIs)
+			{
+				std::size_t hsize = this->historyFrameUnderlying.size();
+				out.write(reinterpret_cast<char*>(&hsize), sizeof(std::size_t));
+				for (auto& frameUnderlyingA : this->historyFrameUnderlying)
+				{
+					std::size_t isize = frameUnderlyingA.size();
+					out.write(reinterpret_cast<char*>(&isize), sizeof(std::size_t));
+					for (auto v : frameUnderlyingA)	
+						out.write(reinterpret_cast<char*>((std::size_t*)&v), sizeof(std::size_t));					
+				}
+			}
+		}
+		if (ok)
+		{		
+			out.write(reinterpret_cast<char*>(&this->frameHistoryDynamicIs), 1);
+			if (this->frameHistoryDynamicIs)
+			{
+				std::size_t hsize = this->historyFrameHistory.size();
+				out.write(reinterpret_cast<char*>(&hsize), sizeof(std::size_t));
+				for (auto& frameHistoryA : this->historyFrameHistory)
+				{
+					std::size_t isize = frameHistoryA.size();
+					out.write(reinterpret_cast<char*>(&isize), sizeof(std::size_t));
+					for (auto v : frameHistoryA)	
+						out.write(reinterpret_cast<char*>((std::size_t*)&v), sizeof(std::size_t));					
+				}
+			}
+		}
 		out.close();
 		{
 		// // trace sizes and transitions
@@ -2660,6 +2690,63 @@ bool Alignment::Active::load(const ActiveIOParameters& pp)
 			in.clear();
 			in.exceptions(in.failbit | in.badbit | in.eofbit);
 		}			
+		if (ok)
+		{		
+			this->frameUnderlyingDynamicIs = false;
+			this->historyFrameUnderlying.clear();
+			this->frameHistoryDynamicIs = false;
+			this->historyFrameHistory.clear();
+			in.exceptions(in.badbit);
+			in.read(reinterpret_cast<char*>(&this->frameUnderlyingDynamicIs), 1);
+			if (!in.eof())
+			{
+				in.clear();
+				in.exceptions(in.failbit | in.badbit | in.eofbit);
+				if (this->frameUnderlyingDynamicIs)
+				{
+					this->historyFrameUnderlying.reserve(this->historySize);
+					std::size_t hsize = 0;
+					in.read(reinterpret_cast<char*>(&hsize), sizeof(std::size_t));
+					for (std::size_t h = 0; ok && h < hsize; h++)	
+					{
+						std::size_t isize = 0;
+						in.read(reinterpret_cast<char*>(&isize), sizeof(std::size_t));
+						SizeList frameUnderlyingsA;
+						frameUnderlyingsA.reserve(isize);
+						for (std::size_t i = 0; ok && i < isize; i++)	
+						{
+							std::size_t v;
+							in.read(reinterpret_cast<char*>(&v), sizeof(std::size_t));
+							frameUnderlyingsA.push_back(v);
+						}	
+						this->historyFrameUnderlying.push_back(frameUnderlyingsA);
+					}					
+				}	
+				in.read(reinterpret_cast<char*>(&this->frameHistoryDynamicIs), 1);
+				if (this->frameHistoryDynamicIs)
+				{
+					this->historyFrameHistory.reserve(this->historySize);
+					std::size_t hsize = 0;
+					in.read(reinterpret_cast<char*>(&hsize), sizeof(std::size_t));
+					for (std::size_t h = 0; ok && h < hsize; h++)	
+					{
+						std::size_t isize = 0;
+						in.read(reinterpret_cast<char*>(&isize), sizeof(std::size_t));
+						SizeList frameHistorysA;
+						frameHistorysA.reserve(isize);
+						for (std::size_t i = 0; ok && i < isize; i++)	
+						{
+							std::size_t v;
+							in.read(reinterpret_cast<char*>(&v), sizeof(std::size_t));
+							frameHistorysA.push_back(v);
+						}	
+						this->historyFrameHistory.push_back(frameHistorysA);
+					}					
+				}					
+			}
+			in.clear();
+			in.exceptions(in.failbit | in.badbit | in.eofbit);
+		}	
 		in.close();
 		// cache sizes and transitions
 		if (ok && historySliceCachingIs && !this->historySliceCumulativeIs 
