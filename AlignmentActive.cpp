@@ -1781,15 +1781,15 @@ bool Alignment::Active::induce(ActiveInduceParameters pp, ActiveUpdateParameters
 								auto j = eventB;
 								for (std::size_t g = 0; g < frameUnderlyingsA.size(); g++)
 								{
-									std::size_t f = 0;
+									auto f = frameUnderlyingsA[g];
 									if (this->frameUnderlyingDynamicIs)
 									{
 										auto& frameUnderlyingsB = this->historyFrameUnderlying[j];
 										if (g < frameUnderlyingsB.size())
 											f = frameUnderlyingsB[g];
+										else
+											f = 0;
 									}
-									else
-										f = frameUnderlyingsA[g];
 									if (g && !f)
 										continue;
 									auto& mm = this->framesVarsOffset[g];
@@ -1889,15 +1889,15 @@ bool Alignment::Active::induce(ActiveInduceParameters pp, ActiveUpdateParameters
 									auto& slpp = this->decomp->mapVarParent();
 									for (std::size_t g = 0; g < this->frameHistorys.size(); g++)
 									{
-										std::size_t f = 0;
+										std::size_t f = this->frameHistorys[g];
 										if (this->frameHistoryDynamicIs)
 										{
 											auto& frameHistorysB = this->historyFrameHistory[j];
 											if (g < frameHistorysB.size())
 												f = frameHistorysB[g];
+											else
+												f = 0;
 										}
-										else
-											f = frameHistorys[g];
 										if (!f)
 											continue;
 										auto& mm = this->framesVarsOffset[g];
@@ -2315,10 +2315,7 @@ bool Alignment::Active::dump(const ActiveIOParameters& pp)
 					for (auto v : frameUnderlyingA)	
 						out.write(reinterpret_cast<char*>((std::size_t*)&v), sizeof(std::size_t));					
 				}
-			}
-		}
-		if (ok)
-		{		
+			}	
 			out.write(reinterpret_cast<char*>(&this->frameHistoryDynamicIs), 1);
 			if (this->frameHistoryDynamicIs)
 			{
@@ -2827,6 +2824,15 @@ bool Alignment::Active::load(const ActiveIOParameters& pp)
 				// prev += pp.second;		
 			// EVAL(prev);		
 		// }		
+		// frames
+		{
+			EVAL(this->frameUnderlyingDynamicIs);
+			EVAL(this->frameUnderlyings);
+			EVAL(this->historyFrameUnderlying);
+			EVAL(this->frameHistoryDynamicIs);
+			EVAL(this->frameHistorys);
+			EVAL(this->historyFrameHistory);
+		}	
 		}
 		if (ok && this->logging)
 		{
