@@ -2824,15 +2824,15 @@ bool Alignment::Active::load(const ActiveIOParameters& pp)
 				// prev += pp.second;		
 			// EVAL(prev);		
 		// }		
-		// frames
-		{
-			EVAL(this->frameUnderlyingDynamicIs);
-			EVAL(this->frameUnderlyings);
-			EVAL(this->historyFrameUnderlying);
-			EVAL(this->frameHistoryDynamicIs);
-			EVAL(this->frameHistorys);
-			EVAL(this->historyFrameHistory);
-		}	
+		// // frames
+		// {
+			// EVAL(this->frameUnderlyingDynamicIs);
+			// EVAL(this->frameUnderlyings);
+			// EVAL(this->historyFrameUnderlying);
+			// EVAL(this->frameHistoryDynamicIs);
+			// EVAL(this->frameHistorys);
+			// EVAL(this->historyFrameHistory);
+		// }	
 		}
 		if (ok && this->logging)
 		{
