@@ -365,11 +365,9 @@ bool Alignment::Active::update(ActiveUpdateParameters pp)
 					SizeUCharStructList jj;
 					if (ok)
 					{
-						SizeList frameUnderlyingsA;
-						if (this->frameUnderlyings.size())
-							frameUnderlyingsA = this->frameUnderlyings;
-						else
-							frameUnderlyingsA.push_back(0);
+						SizeList frameUnderlyingsA(this->frameUnderlyings);
+						if (!frameUnderlyingsA.size())
+							frameUnderlyingsA.push_back(0);	
 						std::size_t m = 0;
 						for (auto& hr : this->underlyingHistoryRepa)
 							m += hr->dimension*frameUnderlyingsA.size();
@@ -896,6 +894,9 @@ bool Alignment::Active::induce(ActiveInduceParameters pp, ActiveUpdateParameters
 					varA = this->var;
 					auto& setEventsA = this->historySlicesSetEvent[sliceA];
 					eventsA.insert(eventsA.end(),setEventsA.begin(),setEventsA.end());
+					SizeList frameUnderlyingsA(this->frameUnderlyings);
+					if (!frameUnderlyingsA.size())
+						frameUnderlyingsA.push_back(0);					
 					if (ok && llr.size())
 					{
 						auto& qqx = this->induceVarExclusions;					
@@ -911,11 +912,6 @@ bool Alignment::Active::induce(ActiveInduceParameters pp, ActiveUpdateParameters
 							}
 						}
 					}
-					SizeList frameUnderlyingsA;
-					if (this->frameUnderlyings.size())
-						frameUnderlyingsA = this->frameUnderlyings;
-					else
-						frameUnderlyingsA.push_back(0);
 					if (ok && qqr.size())
 					{
 						hrr = std::make_unique<HistoryRepa>();
@@ -1771,11 +1767,9 @@ bool Alignment::Active::induce(ActiveInduceParameters pp, ActiveUpdateParameters
 							SizeUCharStructList jj;
 							if (ok)
 							{
-								SizeList frameUnderlyingsA;
-								if (this->frameUnderlyings.size())
-									frameUnderlyingsA = this->frameUnderlyings;
-								else
-									frameUnderlyingsA.push_back(0);
+								SizeList frameUnderlyingsA(this->frameUnderlyings);
+								if (!frameUnderlyingsA.size())
+									frameUnderlyingsA.push_back(0);	
 								std::size_t m = 0;
 								for (auto& hr : this->underlyingHistoryRepa)
 									m += hr->dimension*frameUnderlyingsA.size();
