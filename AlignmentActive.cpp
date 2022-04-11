@@ -52,9 +52,9 @@ std::size_t Alignment::ActiveSystem::next(int bitsA)
 			throw std::out_of_range("ActiveSystem::next");
 		return this->block << bits;
 	}
-	auto bitsDiff = bitsA - this->bits;
-	auto blockA = ((this->block >> bitsDiff) + 1) << bitsDiff;
-	this->block  = blockA + (1 << bitsDiff) - 1;
+	std::size_t bitsDiff = bitsA - this->bits;
+	std::size_t blockA = ((this->block >> bitsDiff) + 1) << bitsDiff;
+	this->block  = blockA + ((std::size_t)1 << bitsDiff) - 1;
 	if (this->block > (std::size_t(-1) >> bits))
 		throw std::out_of_range("ActiveSystem::next");
 	return blockA << bits;
@@ -327,7 +327,7 @@ bool Alignment::Active::update(ActiveUpdateParameters pp)
 						auto rr1 = hr1->arr;
 						auto j = this->historyEvent;
 						std::size_t v = 0;
-						for (int i = n-1; i >= 0; i--)
+						for (int i = (int)n-1; i >= 0; i--)
 							if (rr1[i])
 							{
 								v = rr1[i];
@@ -335,7 +335,7 @@ bool Alignment::Active::update(ActiveUpdateParameters pp)
 							}
 						rr[j] = v;
 						if (v && this->underlyingSlicesParent.find(v) == this->underlyingSlicesParent.end())
-							for (int i = n-1; i > 0; i--)
+							for (int i = (int)n-1; i > 0; i--)
 								if (rr1[i] && rr1[i-1])
 									this->underlyingSlicesParent[rr1[i]] = rr1[i-1];
 					}
@@ -540,7 +540,7 @@ bool Alignment::Active::update(ActiveUpdateParameters pp)
 					std::unique_ptr<SizeList> ll;
 					if (ok)
 					{
-						ll = drmul(jj,*this->decomp,pp.mapCapacity);	
+						ll = drmul(jj,*this->decomp,(unsigned char)(pp.mapCapacity));	
 						ok = ok && ll;
 						if (!ok)
 						{
@@ -1226,7 +1226,7 @@ bool Alignment::Active::induce(ActiveInduceParameters pp, ActiveUpdateParameters
 								qqa[it->second]++;
 								it = slppa.find(it->second);
 							}								
-							for (int i = ll.size() - 1; i > 0; i--)
+							for (int i = (int)(ll.size()) - 1; i > 0; i--)
 								for (int m = i-1; m >= 0; m--)
 									mma[ll[i]].insert(ll[m]);
 						}
@@ -1531,7 +1531,7 @@ bool Alignment::Active::induce(ActiveInduceParameters pp, ActiveUpdateParameters
 				// remap kk and fr with block ids
 				if (ok)
 				{
-					if (frSize > (1 << this->bits))
+					if (frSize > ((std::size_t)1 << this->bits))
 					{
 						ok = false;
 						LOG "induce\terror: block too small" << "\tfud size: " << frSize << "\tblock: " << (1 << this->bits) UNLOG
@@ -1569,7 +1569,7 @@ bool Alignment::Active::induce(ActiveInduceParameters pp, ActiveUpdateParameters
 					fr->layers.push_back(TransformRepaPtrList());
 					auto& ll = fr->layers.back();
 					ll.reserve(sz);					
-					if (sz > (1 << this->bits))
+					if (sz > ((std::size_t)1 << this->bits))
 					{
 						ok = false;
 						LOG "induce\terror: block too small" << "\tslice size: " << sz << "\tblock: " << (1 << this->bits) UNLOG
@@ -1958,7 +1958,7 @@ bool Alignment::Active::induce(ActiveInduceParameters pp, ActiveUpdateParameters
 							std::unique_ptr<SizeList> ll;
 							if (ok)
 							{
-								ll = drmul(jj,*this->decomp,ppu.mapCapacity);	
+								ll = drmul(jj,*this->decomp,(unsigned char)(ppu.mapCapacity));	
 								ok = ok && ll && ll->size() && ll->back();
 								if (!ok)
 								{
@@ -2377,7 +2377,7 @@ bool Alignment::Active::dump(const ActiveIOParameters& pp)
 		{
 			out.close();			
 		}
-		catch (const std::exception& e) 
+		catch (const std::exception&) 
 		{
 		}
 	}
@@ -2847,7 +2847,7 @@ bool Alignment::Active::load(const ActiveIOParameters& pp)
 		{
 			in.close();			
 		}
-		catch (const std::exception& e) 
+		catch (const std::exception&) 
 		{
 		}	
 	}
