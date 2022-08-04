@@ -1993,6 +1993,7 @@ bool Alignment::Active::induce(ActiveInduceParameters pp, ActiveUpdateParameters
 					auto rs = this->historySparse->arr;
 					auto& slices = this->historySlicesSetEvent;
 					auto& sizes = this->historySlicesSize;
+					auto& lengths = this->historySlicesLength;
 					auto& nexts = this->historySlicesSlicesSizeNext;
 					auto& prevs = this->historySlicesSliceSetPrev;					
 					for (auto sliceC : prevs[sliceA])
@@ -2013,6 +2014,7 @@ bool Alignment::Active::induce(ActiveInduceParameters pp, ActiveUpdateParameters
 					SizeSet events;
 					for (auto sliceB : sl)
 					{
+						lengths[sliceB] = lengths[sliceA] + 1;
 						auto slicesIt = slices.find(sliceB);
 						if (slicesIt != slices.end())
 						{
@@ -2739,6 +2741,18 @@ bool Alignment::Active::load(const ActiveIOParameters& pp)
 			in.exceptions(in.failbit | in.badbit | in.eofbit);
 		}	
 		in.close();
+		// cache lengths
+		if (ok && historySliceCachingIs && this->decomp && this->historySparse)
+		{
+			auto& lengths = this->historySlicesLength;
+			auto& dr = *this->decomp;
+			for (auto& fs : dr.fuds)
+			{
+				auto sliceA = fs.parent;
+				for (auto sliceB : fs.children)
+					lengths[sliceB] = lengths[sliceA] + 1;
+			}
+		}
 		// cache sizes and transitions
 		if (ok && historySliceCachingIs && !this->historySliceCumulativeIs 
 			&& this->decomp && this->historySparse)
