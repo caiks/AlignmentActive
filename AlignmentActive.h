@@ -104,7 +104,7 @@ namespace Alignment
 		HistorySparseArrayPtrList underlyingHistorySparse;
 		SizeSizeUMap underlyingSlicesParent;
 
-		std::unique_ptr<DecompFudSlicedRepa> decomp;
+		std::shared_ptr<DecompFudSlicedRepa> decomp;
 		
 		std::unique_ptr<HistorySparseArray> historySparse;
 		SizeSizeSetMap historySlicesSetEvent;
