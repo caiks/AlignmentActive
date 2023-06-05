@@ -98,7 +98,7 @@ std::ostream& operator<<(std::ostream& out, const ActiveEventsArray& ev)
 	return out;
 }
 
-Active::Active(std::string nameA) : name(nameA), terminate(false), log(log_default), layerer_log(layerer_log_default), historyOverflow(false), historyEvent(0), historySize(0), continousIs(false), bits(16), var(0), varSlice(0), induceThreshold(100), logging(false), summary(false), updateCallback(0),  induceCallback(0), client(0), historySliceCachingIs(false), historySliceCumulativeIs(false), frameUnderlyingDynamicIs(false),frameHistoryDynamicIs(false)
+Active::Active(std::string nameA) : name(nameA), terminate(false), log(log_default), layerer_log(layerer_log_default), historyOverflow(false), historyEvent(0), historySize(0), continousIs(false), bits(16), var(0), varSlice(0), induceThreshold(100), logging(false), summary(false), updateCallback(0),  induceCallback(0), client(0), historySliceCachingIs(false), historySliceCumulativeIs(false), frameUnderlyingDynamicIs(false), frameHistoryDynamicIs(false), underlyingOffsetIs(false)
 {
 }
 
@@ -2175,6 +2175,27 @@ bool Alignment::Active::dump(const ActiveIOParameters& pp)
 				}
 			}
 		}
+		if (ok)
+		{		
+			out.write(reinterpret_cast<char*>(&this->underlyingOffsetIs), 1);
+			if (this->underlyingOffsetIs)
+			{
+				std::size_t hsize = this->underlyingsVarsOffset.size();
+				out.write(reinterpret_cast<char*>(&hsize), sizeof(std::size_t));
+				for (auto mm : this->underlyingsVarsOffset)	
+				{
+					std::size_t i = mm.first;
+					out.write(reinterpret_cast<char*>(&i), sizeof(std::size_t));
+					std::size_t msize = mm.second.size();
+					out.write(reinterpret_cast<char*>(&msize), sizeof(std::size_t));
+					for (auto p : mm.second)	
+					{
+						out.write(reinterpret_cast<char*>((std::size_t*)&p.first), sizeof(std::size_t));
+						out.write(reinterpret_cast<char*>((std::size_t*)&p.second), sizeof(std::size_t));						
+					}
+				}
+			}	
+		}
 		out.close();
 		{
 		// // trace sizes and transitions
@@ -2578,6 +2599,42 @@ bool Alignment::Active::load(const ActiveIOParameters& pp)
 						}	
 						this->historyFrameHistory.push_back(frameHistorysA);
 					}					
+				}					
+			}
+			in.clear();
+			in.exceptions(in.failbit | in.badbit | in.eofbit);
+		}	
+		if (ok)
+		{		
+			this->underlyingOffsetIs = false;
+			this->underlyingsVarsOffset.clear();
+			in.exceptions(in.badbit);
+			in.read(reinterpret_cast<char*>(&this->underlyingOffsetIs), 1);
+			if (!in.eof())
+			{
+				in.clear();
+				in.exceptions(in.failbit | in.badbit | in.eofbit);
+				if (this->underlyingOffsetIs)
+				{
+					std::size_t hsize = 0;
+					in.read(reinterpret_cast<char*>(&hsize), sizeof(std::size_t));	
+					for (std::size_t h = 0; ok && h < hsize; h++)	
+					{
+						std::size_t i;
+						in.read(reinterpret_cast<char*>(&i), sizeof(std::size_t));
+						auto& mm = this->underlyingsVarsOffset[i];				
+						std::size_t msize;
+						in.read(reinterpret_cast<char*>(&msize), sizeof(std::size_t));
+						mm.reserve(msize);
+						for (std::size_t m = 0; ok && m < msize; m++)	
+						{
+							std::size_t p;
+							in.read(reinterpret_cast<char*>(&p), sizeof(std::size_t));
+							std::size_t q;
+							in.read(reinterpret_cast<char*>(&q), sizeof(std::size_t));
+							mm[p] = q;
+						}
+					}	
 				}					
 			}
 			in.clear();
