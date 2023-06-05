@@ -137,7 +137,12 @@ namespace Alignment
 		bool frameHistoryDynamicIs;
 		SizeList frameHistorys;
 		SizeListList historyFrameHistory;
-		std::map<std::size_t, SizeSizeUMap> framesVarsOffset;		
+		std::map<std::size_t, SizeSizeUMap> framesVarsOffset;	
+		
+		bool underlyingOffsetIs;
+		std::map<std::size_t, SizeSizeUMap> underlyingsVarsOffset;	
+
+		void varOffset(SizeSizeUMap&, std::size_t&);		
 		
 		std::size_t varMax() const;
 		

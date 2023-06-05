@@ -102,6 +102,20 @@ Active::Active(std::string nameA) : name(nameA), terminate(false), log(log_defau
 {
 }
 
+inline void Alignment::Active::varOffset(SizeSizeUMap& mm, std::size_t& v)
+{
+	auto x = v >> this->bits << this->bits;
+	auto it = mm.find(x);
+	if (it != mm.end())
+		v += it->second;
+	else
+	{
+		auto y = this->system->next(this->bits);
+		mm[x] = y-x;
+		v += y-x;
+	}
+}
+
 std::size_t Alignment::Active::varMax() const
 {
 	std::size_t v = this->var;
@@ -401,18 +415,7 @@ bool Alignment::Active::update(ActiveUpdateParameters pp)
 									{
 										qq.size = vv[i];
 										if (f)
-										{
-											auto x = qq.size >> this->bits << this->bits;
-											auto it = mm.find(x);
-											if (it != mm.end())
-												qq.size += it->second;
-											else
-											{
-												auto y = this->system->next(this->bits);
-												mm[x] = y-x;
-												qq.size += y-x;
-											}
-										}
+											this->varOffset(mm, qq.size);
 										jj.push_back(qq);
 									}
 								}							
@@ -432,18 +435,7 @@ bool Alignment::Active::update(ActiveUpdateParameters pp)
 										qq.uchar = 1;			
 										qq.size = v;
 										if (f)
-										{
-											auto x = qq.size >> this->bits << this->bits;
-											auto it = mm.find(x);
-											if (it != mm.end())
-												qq.size += it->second;
-											else
-											{
-												auto y = this->system->next(this->bits);
-												mm[x] = y-x;
-												qq.size += y-x;
-											}
-										}
+											this->varOffset(mm, qq.size);
 										jj.push_back(qq);
 									}								
 									auto it = slpp.find(v);
@@ -455,18 +447,7 @@ bool Alignment::Active::update(ActiveUpdateParameters pp)
 										if (!qq.size)
 											break;
 										if (f)
-										{
-											auto x = qq.size >> this->bits << this->bits;
-											auto it = mm.find(x);
-											if (it != mm.end())
-												qq.size += it->second;
-											else
-											{
-												auto y = this->system->next(this->bits);
-												mm[x] = y-x;
-												qq.size += y-x;
-											}
-										}
+											this->varOffset(mm, qq.size);
 										jj.push_back(qq);
 										it = slpp.find(it->second);
 									}										
@@ -495,18 +476,7 @@ bool Alignment::Active::update(ActiveUpdateParameters pp)
 										qq.uchar = 1;			
 										qq.size = v;
 										if (f)
-										{
-											auto x = qq.size >> this->bits << this->bits;
-											auto it = mm.find(x);
-											if (it != mm.end())
-												qq.size += it->second;
-											else
-											{
-												auto y = this->system->next(this->bits);
-												mm[x] = y-x;
-												qq.size += y-x;
-											}
-										}
+											this->varOffset(mm, qq.size);			
 										jj.push_back(qq);
 									}								
 									auto it = slpp.find(v);
@@ -518,18 +488,7 @@ bool Alignment::Active::update(ActiveUpdateParameters pp)
 										if (!qq.size)
 											break;										
 										if (f)
-										{
-											auto x = qq.size >> this->bits << this->bits;
-											auto it = mm.find(x);
-											if (it != mm.end())
-												qq.size += it->second;
-											else
-											{
-												auto y = this->system->next(this->bits);
-												mm[x] = y-x;
-												qq.size += y-x;
-											}
-										}
+											this->varOffset(mm, qq.size);			
 										jj.push_back(qq);
 										it = slpp.find(it->second);
 									}										
@@ -938,18 +897,7 @@ bool Alignment::Active::induce(ActiveInduceParameters pp, ActiveUpdateParameters
 							{
 								vvr[i] = v;
 								if (g || f)
-								{
-									auto x = vvr[i] >> this->bits << this->bits;
-									auto it = mm.find(x);
-									if (it != mm.end())
-										vvr[i] += it->second;
-									else
-									{
-										auto y = this->system->next(this->bits);
-										mm[x] = y-x;
-										vvr[i] += y-x;
-									}
-								}
+									this->varOffset(mm, vvr[i]);
 								for (auto& hr : llr)
 								{
 									auto& mvv = hr->mapVarInt();
@@ -1036,51 +984,18 @@ bool Alignment::Active::induce(ActiveInduceParameters pp, ActiveUpdateParameters
 										if (v)
 										{
 											if (f)
-											{
-												auto x = v >> this->bits << this->bits;
-												auto it = mm.find(x);
-												if (it != mm.end())
-													raa[j*na + i] += it->second;
-												else
-												{
-													auto y = this->system->next(this->bits);
-													mm[x] = y-x;
-													raa[j*na + i] += y-x;
-												}
-											}
+												this->varOffset(mm, raa[j*na + i]);
 											auto it = slpp.find(v);
 											while (it != slpp.end())
 											{
 												auto w1 = it->first;
 												if (f)
-												{
-													auto x = w1 >> this->bits << this->bits;
-													auto it = mm.find(x);
-													if (it != mm.end())
-														w1 += it->second;
-													else
-													{
-														auto y = this->system->next(this->bits);
-														mm[x] = y-x;
-														w1 += y-x;
-													}
-												}
+													this->varOffset(mm, w1);
 												auto w2 = it->second;
 												if (!w2)
 													break;
 												if (f)
-												{
-													auto x = w2 >> this->bits << this->bits;
-													auto it = mm.find(x);
-													if (it != mm.end())
-														w2 += it->second;
-													else
-													{
-														auto y = this->system->next(this->bits);
-														mm[x] = y-x;
-														w2 += y-x;
-													}
-												}
+													this->varOffset(mm, w2);
 												slppa.insert_or_assign(w1, w2);
 												it = slpp.find(it->second);
 											}
@@ -1119,51 +1034,18 @@ bool Alignment::Active::induce(ActiveInduceParameters pp, ActiveUpdateParameters
 									if (v)
 									{
 										if (f)
-										{
-											auto x = v >> this->bits << this->bits;
-											auto it = mm.find(x);
-											if (it != mm.end())
-												raa[j*na + i] += it->second;
-											else
-											{
-												auto y = this->system->next(this->bits);
-												mm[x] = y-x;
-												raa[j*na + i] += y-x;
-											}
-										}
+											this->varOffset(mm, raa[j*na + i]);
 										auto it = slpp.find(v);
 										while (it != slpp.end())
 										{
 											auto w1 = it->first;
 											if (f)
-											{
-												auto x = w1 >> this->bits << this->bits;
-												auto it = mm.find(x);
-												if (it != mm.end())
-													w1 += it->second;
-												else
-												{
-													auto y = this->system->next(this->bits);
-													mm[x] = y-x;
-													w1 += y-x;
-												}
-											}
+												this->varOffset(mm, w1);
 											auto w2 = it->second;
 											if (!w2)
 												break;
 											if (f)
-											{
-												auto x = w2 >> this->bits << this->bits;
-												auto it = mm.find(x);
-												if (it != mm.end())
-													w2 += it->second;
-												else
-												{
-													auto y = this->system->next(this->bits);
-													mm[x] = y-x;
-													w2 += y-x;
-												}
-											}
+												this->varOffset(mm, w2);
 											slppa.insert_or_assign(w1, w2);
 											it = slpp.find(it->second);
 										}
@@ -1811,18 +1693,7 @@ bool Alignment::Active::induce(ActiveInduceParameters pp, ActiveUpdateParameters
 											{
 												qq.size = vv[i];
 												if (f)
-												{
-													auto x = qq.size >> this->bits << this->bits;
-													auto it = mm.find(x);
-													if (it != mm.end())
-														qq.size += it->second;
-													else
-													{
-														auto y = this->system->next(this->bits);
-														mm[x] = y-x;
-														qq.size += y-x;
-													}
-												}
+													this->varOffset(mm, qq.size);
 												jj.push_back(qq);
 											}
 										}							
@@ -1842,18 +1713,7 @@ bool Alignment::Active::induce(ActiveInduceParameters pp, ActiveUpdateParameters
 												qq.uchar = 1;			
 												qq.size = v;
 												if (f)
-												{
-													auto x = qq.size >> this->bits << this->bits;
-													auto it = mm.find(x);
-													if (it != mm.end())
-														qq.size += it->second;
-													else
-													{
-														auto y = this->system->next(this->bits);
-														mm[x] = y-x;
-														qq.size += y-x;
-													}
-												}
+													this->varOffset(mm, qq.size);
 												jj.push_back(qq);
 											}								
 											auto it = slpp.find(v);
@@ -1865,18 +1725,7 @@ bool Alignment::Active::induce(ActiveInduceParameters pp, ActiveUpdateParameters
 												if (!qq.size)
 													break;
 												if (f)
-												{
-													auto x = qq.size >> this->bits << this->bits;
-													auto it = mm.find(x);
-													if (it != mm.end())
-														qq.size += it->second;
-													else
-													{
-														auto y = this->system->next(this->bits);
-														mm[x] = y-x;
-														qq.size += y-x;
-													}
-												}
+													this->varOffset(mm, qq.size);
 												jj.push_back(qq);
 												it = slpp.find(it->second);
 											}										
@@ -1913,18 +1762,7 @@ bool Alignment::Active::induce(ActiveInduceParameters pp, ActiveUpdateParameters
 												qq.uchar = 1;			
 												qq.size = v;
 												if (f)
-												{
-													auto x = qq.size >> this->bits << this->bits;
-													auto it = mm.find(x);
-													if (it != mm.end())
-														qq.size += it->second;
-													else
-													{
-														auto y = this->system->next(this->bits);
-														mm[x] = y-x;
-														qq.size += y-x;
-													}
-												}
+													this->varOffset(mm, qq.size);
 												jj.push_back(qq);
 											}								
 											auto it = slpp.find(v);
@@ -1936,18 +1774,7 @@ bool Alignment::Active::induce(ActiveInduceParameters pp, ActiveUpdateParameters
 												if (!qq.size)
 													break;
 												if (f)
-												{
-													auto x = qq.size >> this->bits << this->bits;
-													auto it = mm.find(x);
-													if (it != mm.end())
-														qq.size += it->second;
-													else
-													{
-														auto y = this->system->next(this->bits);
-														mm[x] = y-x;
-														qq.size += y-x;
-													}
-												}
+													this->varOffset(mm, qq.size);
 												jj.push_back(qq);
 												it = slpp.find(it->second);
 											}										
