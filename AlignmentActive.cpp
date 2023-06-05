@@ -102,7 +102,7 @@ Active::Active(std::string nameA) : name(nameA), terminate(false), log(log_defau
 {
 }
 
-inline void Alignment::Active::varOffset(SizeSizeUMap& mm, std::size_t& v)
+inline void Alignment::Active::varPromote(SizeSizeUMap& mm, std::size_t& v)
 {
 	auto x = v >> this->bits << this->bits;
 	auto it = mm.find(x);
@@ -116,15 +116,31 @@ inline void Alignment::Active::varOffset(SizeSizeUMap& mm, std::size_t& v)
 	}
 }
 
+std::size_t Alignment::Active::varDemote(const SizeSizeUMap& mm, std::size_t v) const
+{
+	auto x = v >> this->bits << this->bits;
+	for (auto& p : mm)
+	{
+		if (x == p.first + p.second)
+		{
+			return v - p.second;
+		}
+	}
+	return v;
+}
+
 std::size_t Alignment::Active::varMax() const
 {
 	std::size_t v = this->var;
 	v = std::max(v,this->varSlice);	
 	if (this->decomp)
 		v = std::max(v,this->decomp->varMax());
+	for (auto& p : this->underlyingsVarsOffset)
+		for (auto& q : p.second)	
+			v = std::max(v,q.first+q.second);
 	for (auto& p : this->framesVarsOffset)
 		for (auto& q : p.second)	
-			v = std::max(v,q.first+q.second);						
+			v = std::max(v,q.first+q.second);
 	return (((v >> this->bits) + 1) << this->bits) - 1;
 }
 
@@ -415,7 +431,7 @@ bool Alignment::Active::update(ActiveUpdateParameters pp)
 									{
 										qq.size = vv[i];
 										if (f)
-											this->varOffset(mm, qq.size);
+											this->varPromote(mm, qq.size);
 										jj.push_back(qq);
 									}
 								}							
@@ -435,7 +451,7 @@ bool Alignment::Active::update(ActiveUpdateParameters pp)
 										qq.uchar = 1;			
 										qq.size = v;
 										if (f)
-											this->varOffset(mm, qq.size);
+											this->varPromote(mm, qq.size);
 										jj.push_back(qq);
 									}								
 									auto it = slpp.find(v);
@@ -447,7 +463,7 @@ bool Alignment::Active::update(ActiveUpdateParameters pp)
 										if (!qq.size)
 											break;
 										if (f)
-											this->varOffset(mm, qq.size);
+											this->varPromote(mm, qq.size);
 										jj.push_back(qq);
 										it = slpp.find(it->second);
 									}										
@@ -476,7 +492,7 @@ bool Alignment::Active::update(ActiveUpdateParameters pp)
 										qq.uchar = 1;			
 										qq.size = v;
 										if (f)
-											this->varOffset(mm, qq.size);			
+											this->varPromote(mm, qq.size);			
 										jj.push_back(qq);
 									}								
 									auto it = slpp.find(v);
@@ -488,7 +504,7 @@ bool Alignment::Active::update(ActiveUpdateParameters pp)
 										if (!qq.size)
 											break;										
 										if (f)
-											this->varOffset(mm, qq.size);			
+											this->varPromote(mm, qq.size);			
 										jj.push_back(qq);
 										it = slpp.find(it->second);
 									}										
@@ -897,7 +913,7 @@ bool Alignment::Active::induce(ActiveInduceParameters pp, ActiveUpdateParameters
 							{
 								vvr[i] = v;
 								if (g || f)
-									this->varOffset(mm, vvr[i]);
+									this->varPromote(mm, vvr[i]);
 								for (auto& hr : llr)
 								{
 									auto& mvv = hr->mapVarInt();
@@ -984,18 +1000,18 @@ bool Alignment::Active::induce(ActiveInduceParameters pp, ActiveUpdateParameters
 										if (v)
 										{
 											if (f)
-												this->varOffset(mm, raa[j*na + i]);
+												this->varPromote(mm, raa[j*na + i]);
 											auto it = slpp.find(v);
 											while (it != slpp.end())
 											{
 												auto w1 = it->first;
 												if (f)
-													this->varOffset(mm, w1);
+													this->varPromote(mm, w1);
 												auto w2 = it->second;
 												if (!w2)
 													break;
 												if (f)
-													this->varOffset(mm, w2);
+													this->varPromote(mm, w2);
 												slppa.insert_or_assign(w1, w2);
 												it = slpp.find(it->second);
 											}
@@ -1034,18 +1050,18 @@ bool Alignment::Active::induce(ActiveInduceParameters pp, ActiveUpdateParameters
 									if (v)
 									{
 										if (f)
-											this->varOffset(mm, raa[j*na + i]);
+											this->varPromote(mm, raa[j*na + i]);
 										auto it = slpp.find(v);
 										while (it != slpp.end())
 										{
 											auto w1 = it->first;
 											if (f)
-												this->varOffset(mm, w1);
+												this->varPromote(mm, w1);
 											auto w2 = it->second;
 											if (!w2)
 												break;
 											if (f)
-												this->varOffset(mm, w2);
+												this->varPromote(mm, w2);
 											slppa.insert_or_assign(w1, w2);
 											it = slpp.find(it->second);
 										}
@@ -1693,7 +1709,7 @@ bool Alignment::Active::induce(ActiveInduceParameters pp, ActiveUpdateParameters
 											{
 												qq.size = vv[i];
 												if (f)
-													this->varOffset(mm, qq.size);
+													this->varPromote(mm, qq.size);
 												jj.push_back(qq);
 											}
 										}							
@@ -1713,7 +1729,7 @@ bool Alignment::Active::induce(ActiveInduceParameters pp, ActiveUpdateParameters
 												qq.uchar = 1;			
 												qq.size = v;
 												if (f)
-													this->varOffset(mm, qq.size);
+													this->varPromote(mm, qq.size);
 												jj.push_back(qq);
 											}								
 											auto it = slpp.find(v);
@@ -1725,7 +1741,7 @@ bool Alignment::Active::induce(ActiveInduceParameters pp, ActiveUpdateParameters
 												if (!qq.size)
 													break;
 												if (f)
-													this->varOffset(mm, qq.size);
+													this->varPromote(mm, qq.size);
 												jj.push_back(qq);
 												it = slpp.find(it->second);
 											}										
@@ -1762,7 +1778,7 @@ bool Alignment::Active::induce(ActiveInduceParameters pp, ActiveUpdateParameters
 												qq.uchar = 1;			
 												qq.size = v;
 												if (f)
-													this->varOffset(mm, qq.size);
+													this->varPromote(mm, qq.size);
 												jj.push_back(qq);
 											}								
 											auto it = slpp.find(v);
@@ -1774,7 +1790,7 @@ bool Alignment::Active::induce(ActiveInduceParameters pp, ActiveUpdateParameters
 												if (!qq.size)
 													break;
 												if (f)
-													this->varOffset(mm, qq.size);
+													this->varPromote(mm, qq.size);
 												jj.push_back(qq);
 												it = slpp.find(it->second);
 											}										

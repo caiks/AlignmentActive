@@ -142,7 +142,8 @@ namespace Alignment
 		bool underlyingOffsetIs;
 		std::map<std::size_t, SizeSizeUMap> underlyingsVarsOffset;	
 
-		void varOffset(SizeSizeUMap&, std::size_t&);		
+		void varPromote(SizeSizeUMap&, std::size_t&);		
+		std::size_t varDemote(const SizeSizeUMap&, std::size_t) const;		
 		
 		std::size_t varMax() const;
 		
