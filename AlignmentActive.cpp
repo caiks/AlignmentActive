@@ -407,6 +407,8 @@ bool Alignment::Active::update(ActiveUpdateParameters pp)
 						auto z = this->historySize;
 						auto over = this->historyOverflow;
 						auto j = this->historyEvent;
+						auto promote = this->underlyingOffsetIs;
+						auto& proms = this->underlyingsVarsOffset;
 						for (std::size_t g = 0; g < frameUnderlyingsA.size(); g++)
 						{
 							auto f = frameUnderlyingsA[g];
@@ -434,9 +436,10 @@ bool Alignment::Active::update(ActiveUpdateParameters pp)
 											this->varPromote(mm, qq.size);
 										jj.push_back(qq);
 									}
-								}							
+								}
 							}
 							auto& slpp = this->underlyingSlicesParent;						
+							std::size_t h = 0;
 							for (auto& hr : this->underlyingHistorySparse)
 							{
 								std::size_t v = 0;
@@ -450,6 +453,8 @@ bool Alignment::Active::update(ActiveUpdateParameters pp)
 										SizeUCharStruct qq;
 										qq.uchar = 1;			
 										qq.size = v;
+										if (promote)
+											this->varPromote(proms[h], qq.size);
 										if (f)
 											this->varPromote(mm, qq.size);
 										jj.push_back(qq);
@@ -462,12 +467,15 @@ bool Alignment::Active::update(ActiveUpdateParameters pp)
 										qq.size = it->second;
 										if (!qq.size)
 											break;
+										if (promote)
+											this->varPromote(proms[h], qq.size);
 										if (f)
 											this->varPromote(mm, qq.size);
 										jj.push_back(qq);
 										it = slpp.find(it->second);
 									}										
 								}
+								h++;
 							}										
 						}
 						if (ok && this->decomp && this->historySparse && this->frameHistorys.size())
@@ -943,7 +951,6 @@ bool Alignment::Active::induce(ActiveInduceParameters pp, ActiveUpdateParameters
 											else
 												rrr[izr + j] = 0;					
 										}
-
 										break;
 									}
 								}
@@ -963,6 +970,8 @@ bool Alignment::Active::induce(ActiveInduceParameters pp, ActiveUpdateParameters
 						auto ev = eventsA.data();
 						auto z = this->historySize;
 						auto over = this->historyOverflow;
+						auto promote = this->underlyingOffsetIs;
+						auto& proms = this->underlyingsVarsOffset;
 						haa = std::make_unique<HistorySparseArray>();
 						haa->size = za;
 						haa->capacity = na;
@@ -977,6 +986,7 @@ bool Alignment::Active::induce(ActiveInduceParameters pp, ActiveUpdateParameters
 							{
 								auto f = frameUnderlyingsA[g];
 								auto& mm = this->framesVarsOffset[g];
+								std::size_t h = 0;
 								for (auto& hr : lla)
 								{
 									auto rr = hr->arr;
@@ -999,17 +1009,23 @@ bool Alignment::Active::induce(ActiveInduceParameters pp, ActiveUpdateParameters
 										raa[j*na + i] = v;
 										if (v)
 										{
+											if (promote)
+												this->varPromote(proms[h], raa[j*na + i]);
 											if (f)
 												this->varPromote(mm, raa[j*na + i]);
 											auto it = slpp.find(v);
 											while (it != slpp.end())
 											{
 												auto w1 = it->first;
+												if (promote)
+													this->varPromote(proms[h], w1);
 												if (f)
 													this->varPromote(mm, w1);
 												auto w2 = it->second;
 												if (!w2)
 													break;
+												if (promote)
+													this->varPromote(proms[h], w2);
 												if (f)
 													this->varPromote(mm, w2);
 												slppa.insert_or_assign(w1, w2);
@@ -1017,6 +1033,7 @@ bool Alignment::Active::induce(ActiveInduceParameters pp, ActiveUpdateParameters
 											}
 										}
 									}	
+									h++;
 									i++;								
 								}
 							}							
@@ -1677,6 +1694,8 @@ bool Alignment::Active::induce(ActiveInduceParameters pp, ActiveUpdateParameters
 								auto z = this->historySize;
 								auto over = this->historyOverflow;
 								auto j = eventB;
+								auto promote = this->underlyingOffsetIs;
+								auto& proms = this->underlyingsVarsOffset;
 								for (std::size_t g = 0; g < frameUnderlyingsA.size(); g++)
 								{
 									auto f = frameUnderlyingsA[g];
@@ -1715,6 +1734,7 @@ bool Alignment::Active::induce(ActiveInduceParameters pp, ActiveUpdateParameters
 										}							
 									}
 									auto& slpp = this->underlyingSlicesParent;
+									std::size_t h = 0;									
 									for (auto& hr : this->underlyingHistorySparse)
 									{
 										std::size_t v = 0;
@@ -1728,6 +1748,8 @@ bool Alignment::Active::induce(ActiveInduceParameters pp, ActiveUpdateParameters
 												SizeUCharStruct qq;
 												qq.uchar = 1;			
 												qq.size = v;
+												if (promote)
+													this->varPromote(proms[h], qq.size);
 												if (f)
 													this->varPromote(mm, qq.size);
 												jj.push_back(qq);
@@ -1740,12 +1762,15 @@ bool Alignment::Active::induce(ActiveInduceParameters pp, ActiveUpdateParameters
 												qq.size = it->second;
 												if (!qq.size)
 													break;
+												if (promote)
+													this->varPromote(proms[h], qq.size);
 												if (f)
 													this->varPromote(mm, qq.size);
 												jj.push_back(qq);
 												it = slpp.find(it->second);
 											}										
 										}
+										h++;
 									}										
 								}
 								if (ok && this->decomp && this->historySparse && this->frameHistorys.size())
