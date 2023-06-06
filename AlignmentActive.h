@@ -139,6 +139,7 @@ namespace Alignment
 		SizeListList historyFrameHistory;
 		std::map<std::size_t, SizeSizeUMap> framesVarsOffset;	
 		
+		// if underlyingOffsetIs then all and only sparse underlying are promoted otherwise none are
 		bool underlyingOffsetIs;
 		std::map<std::size_t, SizeSizeUMap> underlyingsVarsOffset;	
 
