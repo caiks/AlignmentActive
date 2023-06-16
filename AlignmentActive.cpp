@@ -1165,42 +1165,32 @@ bool Alignment::Active::induce(ActiveInduceParameters pp, ActiveUpdateParameters
 					}
 					if (qqa.size())
 					{
+						std::map<std::size_t, SizeSet> eem0;
+						for (auto p : qqa)	
+							if (p.second > 0 && p.second < sliceSizeA)		
+								eem0[p.second].insert(p.first);
 						std::map<std::size_t, SizeSet> eem;
-						for (auto p : qqa)		
+						for (auto p : eem0)		
 						{
-							if (p.second > 0 && p.second < sliceSizeA)
+							auto e = p.first;
+							auto& xx = p.second;
+							for (auto v : xx)
 							{
-								auto v = p.first; 
-								auto& xx = eem[p.second];
-								if (xx.size())
+								auto iv = mma.find(v);
+								if (iv != mma.end())
 								{
-									auto iv = mma.find(v);
-									if (iv != mma.end())
-									{
-										bool found = false;
-										for (auto w : xx)
+									bool found = false;
+									for (auto w : xx)
+										if (iv->second.count(w))
 										{
-											if (iv->second.find(w) != iv->second.end())
-											{
-												found = true;
-												break;
-											}
+											found = true;
+											break;
 										}
-										if (!found)								
-											xx.insert(v);
-									}
-									else
-										xx.insert(v);
-									SizeSet yy(xx);
-									for (auto w : yy)
-									{
-										auto iw = mma.find(w);
-										if (iw != mma.end() && iw->second.find(v) != iw->second.end())
-											xx.erase(w);
-									}
-								}
+									if (!found)								
+										eem[e].insert(v);				
+								}			
 								else
-									xx.insert(v);
+									eem[e].insert(v);
 							}
 						}	
 						double f = 1.0/(double)sliceSizeA;
