@@ -1942,6 +1942,1137 @@ bool Alignment::Active::induce(ActiveInduceParameters pp, ActiveUpdateParameters
 	return ok;
 }
 
+bool Alignment::Active::induce(std::size_t sliceA, ActiveInduceParameters pp, ActiveUpdateParameters ppu)
+{
+	auto hrred = setVarsHistoryRepasReduce_u;
+	auto hrhrred = setVarsHistoryRepasHistoryRepaReduced_u;
+	auto hrjoin = vectorHistoryRepasJoin_u;	
+	auto hrpr = setVarsHistoryRepasRed_u;
+	auto prents = histogramRepaRedsListEntropy;
+	auto hrshuffle = historyRepasShuffle_us;
+	auto hashuffle = historySparseArrayShuffle_us;
+	auto frvars = fudRepasSetVar;
+	auto frder = fudRepasDerived;
+	auto frund = fudRepasUnderlying;
+	auto llfr = setVariablesListTransformRepasFudRepa_u;
+	auto frmul = historyRepasFudRepasMultiply_up;
+	auto frdep = fudRepasSetVarsDepends;
+	auto drmul = listVarValuesDecompFudSlicedRepasPathSlice_u;
+	auto layerer = parametersLayererMaxRollByMExcludedSelfHighestLogIORepa_up;
+		
+	bool ok = true;
+	try 
+	{
+		if (ok && !this->terminate)
+		{
+			std::size_t varA = 0;
+			std::size_t sliceSizeA = 0;	
+			SizeList eventsA;			
+			std::unique_ptr<HistoryRepa> hrr;
+			std::unique_ptr<HistorySparseArray> haa;
+			SizeSet qqr;
+			SizeSizeUMap slppa;
+			// copy repa and sparse from locked active
+			if (ok)
+			{			
+				auto mark = (ok && this->logging) ? clk::now() : std::chrono::time_point<clk>();
+				std::lock_guard<std::mutex> guard(this->mutex);		
+				auto& llr = this->underlyingHistoryRepa;
+				auto& lla = this->underlyingHistorySparse;
+				// check consistent underlying
+				if (ok)
+				{
+					ok = ok && this->historySize > 0;
+					ok = ok && (llr.size() || lla.size());
+					for (auto& hr : llr)
+						ok = ok && hr && hr->size == this->historySize && hr->dimension > 0 && hr->evient;
+					for (auto& hr : lla)
+						ok = ok && hr && hr->size == this->historySize && hr->capacity == 1;
+					if (!ok)
+					{
+						LOG "induce\tslice: " << sliceA << "\terror: inconsistent underlying" UNLOG
+					}	
+				}			
+				// get slice size
+				if (ok)
+				{
+					sliceSizeA = this->historySlicesSetEvent[sliceA].size();
+					ok = ok && sliceSizeA;
+				}
+				// copy events from evient active history to varient selection
+				if (ok)
+				{
+					varA = this->var;
+					auto& setEventsA = this->historySlicesSetEvent[sliceA];
+					eventsA.insert(eventsA.end(),setEventsA.begin(),setEventsA.end());
+					SizeList frameUnderlyingsA(this->frameUnderlyings);
+					if (!frameUnderlyingsA.size())
+						frameUnderlyingsA.push_back(0);					
+					if (ok && llr.size())
+					{
+						auto& qqx = this->induceVarExclusions;					
+						for (auto& hr : llr)
+						{
+							auto n = hr->dimension;
+							auto vv = hr->vectorVar;
+							for (std::size_t i = 0; i < n; i++)
+							{
+								auto v = vv[i];
+								if (qqx.find(v) == qqx.end())
+									qqr.insert(v);
+							}
+						}
+					}
+					if (ok && qqr.size())
+					{
+						hrr = std::make_unique<HistoryRepa>();
+						hrr->dimension = qqr.size()*frameUnderlyingsA.size();
+						auto nr = hrr->dimension;
+						hrr->vectorVar = new std::size_t[nr];
+						auto vvr = hrr->vectorVar;
+						hrr->shape = new std::size_t[nr];
+						auto shr = hrr->shape;
+						hrr->size = eventsA.size();
+						auto zr = hrr->size;
+						hrr->evient = false;
+						hrr->arr = new unsigned char[zr*nr];
+						auto rrr = hrr->arr;		
+						auto ev = eventsA.data();
+						auto z = this->historySize;
+						auto over = this->historyOverflow;
+						std::size_t i = 0;
+						for (std::size_t g = 0; g < frameUnderlyingsA.size(); g++)
+						{
+							auto f = frameUnderlyingsA[g];
+							auto& mm = this->framesVarsOffset[g];
+							for (auto v : qqr)
+							{
+								vvr[i] = v;
+								if (g || f)
+									this->varPromote(mm, vvr[i]);
+								for (auto& hr : llr)
+								{
+									auto& mvv = hr->mapVarInt();
+									auto it = mvv.find(v);
+									if (it != mvv.end())
+									{
+										auto n = hr->dimension;
+										auto rr = hr->arr;
+										auto k = it->second;
+										shr[i] = hr->shape[k];
+										auto izr = i*zr;
+										for (std::size_t j = 0; j < zr; j++)
+										{
+											if (this->frameUnderlyingDynamicIs)
+											{
+												f = 0;
+												auto& frameUnderlyingsB = this->historyFrameUnderlying[ev[j]];
+												if (g < frameUnderlyingsB.size())
+													f = frameUnderlyingsB[g];
+											}
+											if (g && !f)
+												rrr[izr + j] = 0;					
+											else if (f <= ev[j])
+												rrr[izr + j] = rr[(ev[j]-f)*n + k];
+											else if (f && over && z > f)
+												rrr[izr + j] = rr[((ev[j]+z-f)%z)*n + k];
+											else
+												rrr[izr + j] = 0;					
+										}
+										break;
+									}
+								}
+								i++;
+							}
+						}
+						qqr.clear();
+						for (i = 0; i < nr; i++)
+							qqr.insert(vvr[i]);
+					}
+					if (ok && (lla.size() || (this->decomp && this->historySparse && this->frameHistorys.size())))
+					{
+						auto za = eventsA.size(); 
+						auto na = lla.size()*frameUnderlyingsA.size();
+						if (this->decomp && this->historySparse)
+							na += this->frameHistorys.size();
+						auto ev = eventsA.data();
+						auto z = this->historySize;
+						auto over = this->historyOverflow;
+						auto promote = this->underlyingOffsetIs;
+						auto& proms = this->underlyingsVarsOffset;
+						haa = std::make_unique<HistorySparseArray>();
+						haa->size = za;
+						haa->capacity = na;
+						haa->arr = new std::size_t[za*na];
+						auto raa = haa->arr;
+						slppa.reserve(za*na*4);
+						std::size_t i = 0;
+						if (ok)
+						{
+							auto& slpp = this->underlyingSlicesParent;
+							for (std::size_t g = 0; g < frameUnderlyingsA.size(); g++)
+							{
+								auto f = frameUnderlyingsA[g];
+								auto& mm = this->framesVarsOffset[g];
+								std::size_t h = 0;
+								for (auto& hr : lla)
+								{
+									auto rr = hr->arr;
+									for (std::size_t j = 0; j < za; j++)
+									{
+										if (this->frameUnderlyingDynamicIs)
+										{
+											f = 0;
+											auto& frameUnderlyingsB = this->historyFrameUnderlying[ev[j]];
+											if (g < frameUnderlyingsB.size())
+												f = frameUnderlyingsB[g];
+										}
+										std::size_t v = 0;
+										if (g && !f)
+											v = 0;					
+										else if (f <= ev[j])
+											v = rr[ev[j]-f];
+										else if (f && over && z > f)
+											v = rr[(ev[j]+z-f)%z];
+										raa[j*na + i] = v;
+										if (v)
+										{
+											if (promote)
+												this->varPromote(proms[h], raa[j*na + i]);
+											if (f)
+												this->varPromote(mm, raa[j*na + i]);
+											auto it = slpp.find(v);
+											while (it != slpp.end())
+											{
+												auto w1 = it->first;
+												if (promote)
+													this->varPromote(proms[h], w1);
+												if (f)
+													this->varPromote(mm, w1);
+												auto w2 = it->second;
+												if (!w2)
+													break;
+												if (promote)
+													this->varPromote(proms[h], w2);
+												if (f)
+													this->varPromote(mm, w2);
+												slppa.insert_or_assign(w1, w2);
+												it = slpp.find(it->second);
+											}
+										}
+									}	
+									h++;
+									i++;								
+								}
+							}							
+						}
+						if (ok && this->decomp && this->historySparse && this->frameHistorys.size())
+						{
+							auto& hr = this->historySparse;
+							auto& slpp = this->decomp->mapVarParent();
+							for (std::size_t g = 0; g < this->frameHistorys.size(); g++)
+							{
+								auto f = this->frameHistorys[g];
+								auto& mm = this->framesVarsOffset[g];
+								auto rr = hr->arr;
+								for (std::size_t j = 0; j < za; j++)
+								{
+									if (this->frameHistoryDynamicIs)
+									{
+										f = 0;
+										auto& frameHistorysB = this->historyFrameHistory[ev[j]];
+										if (g < frameHistorysB.size())
+											f = frameHistorysB[g];
+									}
+									std::size_t v = 0;
+									if (!f)
+										v = 0;									
+									else if (f <= ev[j])
+										v = rr[ev[j]-f];
+									else if (f && over && z > f)
+										v = rr[(ev[j]+z-f)%z];
+									raa[j*na + i] = v;
+									if (v)
+									{
+										if (f)
+											this->varPromote(mm, raa[j*na + i]);
+										auto it = slpp.find(v);
+										while (it != slpp.end())
+										{
+											auto w1 = it->first;
+											if (f)
+												this->varPromote(mm, w1);
+											auto w2 = it->second;
+											if (!w2)
+												break;
+											if (f)
+												this->varPromote(mm, w2);
+											slppa.insert_or_assign(w1, w2);
+											it = slpp.find(it->second);
+										}
+									}
+								}
+								i++;
+							}									
+						}						
+					}
+				}
+				if (ok && this->logging)
+				{
+					LOG "induce copy\tslice: " << sliceA << "\tslice size: " << sliceSizeA << "\trepa dimension: " << (hrr ? hrr->dimension : 0) << "\tsparse capacity: " << (haa ? haa->capacity : 0) << "\tsparse paths: " << slppa.size() << "\tvariable: " << varA << "\ttime " << ((sec)(clk::now() - mark)).count() << "s" UNLOG
+				}	
+			}
+			// check consistent copy
+			if (ok)
+			{
+				ok = ok && (hrr || haa);
+				ok = ok && (!hrr || (hrr->dimension > 0 && hrr->size == sliceSizeA && hrr->arr));
+				ok = ok && (!haa || (haa->capacity > 0 && haa->size == sliceSizeA && haa->arr));
+				if (!ok)
+				{
+					LOG "induce\tslice: " << sliceA << "\terror: inconsistent copy" UNLOG
+				}	
+			}
+			bool fail = false;
+			std::unique_ptr<HistoryRepa> hr;
+			std::unique_ptr<FudRepa> fr;
+			std::size_t frSize = 0;
+			SizeList kk;
+			double algn = 0.0;
+			double diagonal = 0.0;
+			// induce model while unlocked
+			if (ok)
+			{
+				auto mark = (ok && this->logging) ? clk::now() : std::chrono::time_point<clk>();
+				SizeSizeUMap qqa;
+				std::unordered_map<std::size_t, SizeSet> mma;
+				// prepare for the sparse entropy calculations
+				if (ok && haa && haa->size && haa->capacity)
+				{
+					auto za = haa->size; 
+					auto na = haa->capacity; 
+					auto raa = haa->arr;
+					qqa.reserve(slppa.size());
+					mma.reserve(slppa.size());
+					for (std::size_t k = 0; k < na; k++)
+					{
+						for (std::size_t j = 0; j < za; j++)
+						{
+							auto v = raa[j*na + k];
+							SizeList ll {v};
+							qqa[v]++;
+							auto it = slppa.find(v);
+							while (it != slppa.end())
+							{
+								ll.push_back(it->second);
+								qqa[it->second]++;
+								it = slppa.find(it->second);
+							}								
+							for (int i = (int)(ll.size()) - 1; i > 0; i--)
+								for (int m = i-1; m >= 0; m--)
+									mma[ll[i]].insert(ll[m]);
+						}
+					}
+				}
+				// get top nmax vars by entropy
+				// remove any sparse parents with same entropy as children
+				if (ok && (qqr.size() || qqa.size()))
+				{
+					auto nmax = (std::size_t)std::sqrt(pp.znnmax / (double)(2*sliceSizeA));
+					nmax = std::max(nmax, pp.bmax);
+					DoubleSizePairList ee;
+					ee.reserve(qqr.size() + qqa.size());
+					if (qqr.size())
+					{
+						SizeList vv(qqr.begin(),qqr.end());
+						auto eer = prents(*hrpr(vv.size(), vv.data(), *hrr));
+						for (auto p : *eer)
+							if (p.first > repaRounding)
+								ee.push_back(DoubleSizePair(-p.first,p.second));
+					}
+					if (qqa.size())
+					{
+						std::map<std::size_t, SizeSet> eem0;
+						for (auto p : qqa)	
+							if (p.second > 0 && p.second < sliceSizeA)		
+								eem0[p.second].insert(p.first);
+						std::map<std::size_t, SizeSet> eem;
+						for (auto p : eem0)		
+						{
+							auto e = p.first;
+							auto& xx = p.second;
+							for (auto v : xx)
+							{
+								auto iv = mma.find(v);
+								if (iv != mma.end())
+								{
+									bool found = false;
+									for (auto w : xx)
+										if (iv->second.count(w))
+										{
+											found = true;
+											break;
+										}
+									if (!found)								
+										eem[e].insert(v);				
+								}			
+								else
+									eem[e].insert(v);
+							}
+						}	
+						double f = 1.0/(double)sliceSizeA;
+						for (auto& p : eem)	
+						{
+							double a = (double)p.first * f;
+							double e = -(a * std::log(a) + (1.0-a) * std::log(1.0-a));
+							if (e > repaRounding)
+								for (auto& q : p.second)	
+									ee.push_back(DoubleSizePair(-e,q));
+						}
+					}
+					if (ee.size()) std::sort(ee.begin(), ee.end());
+					SizeUSet qq;
+					qq.reserve(ee.size());
+					for (std::size_t i = 0; i < nmax && i < ee.size(); i++)
+						qq.insert(ee[i].second);
+					SizeSet qqr1(qqr);
+					for (auto v : qqr1)
+						if (qq.find(v) == qq.end())
+							qqr.erase(v);
+					SizeUSet qqa1;
+					qqa1.reserve(qqa.size());
+					for (auto p : qqa)
+						qqa1.insert(p.first);
+					for (auto v : qqa1)
+						if (qq.find(v) == qq.end())
+							qqa.erase(v);
+					for (auto v : qqr)
+						qqa.erase(v);
+					fail = ok && !qqr.size() && !qqa.size();
+					if (ok && this->logging)
+					{
+						std::lock_guard<std::mutex> guard(this->mutex);	
+						if (!fail)
+						{
+							LOG "induce model\tslice: " << sliceA << "\trepa dimension: " << qqr.size() << "\tsparse dimension: " << qqa.size() UNLOG							
+						}
+						else
+						{
+							LOG "induce model\tslice: " << sliceA << "\tno entropy"  UNLOG
+						}
+					}	
+				}	
+				if (ok && !fail)
+				{
+					std::unique_ptr<HistoryRepa> hrs;
+					std::ranlux48_base gen((unsigned int)(pp.seed+sliceA));
+					if (ok && qqr.size())
+					{
+						if (qqr.size() < hrr->dimension)
+						{
+							SizeList vv(qqr.begin(),qqr.end());
+							hr = hrhrred(vv.size(), vv.data(), *hrr);
+						}
+						else
+							hr = std::move(hrr);
+						hrs = hrshuffle(*hr,gen);
+					}
+					if (ok && qqa.size())
+					{
+						auto has = hashuffle(*haa,gen);				
+						auto hra = std::make_unique<HistoryRepa>();
+						auto hras = std::make_unique<HistoryRepa>();	
+						{					
+							auto n = qqa.size();
+							hra->dimension = n;
+							hras->dimension = n;
+							hra->vectorVar = new std::size_t[n];
+							hras->vectorVar = new std::size_t[n];
+							hra->shape = new std::size_t[n];
+							hras->shape = new std::size_t[n];
+							auto za = sliceSizeA;
+							hra->size = za;
+							hras->size = za;
+							hra->evient = false;
+							hras->evient = false;
+							hra->arr = new unsigned char[za*n];
+							hras->arr = new unsigned char[za*n];
+							auto rra = hra->arr;
+							auto rras = hras->arr;
+							std::memset(rra, 0, za*n);
+							std::memset(rras, 0, za*n);
+							auto na = haa->capacity;
+							auto raa = haa->arr;						
+							auto ras = has->arr;
+							{
+								std::size_t i = 0;
+								for (auto p : qqa)
+								{
+									auto v = p.first;
+									hra->vectorVar[i] = v;	
+									hras->vectorVar[i] = v;	
+									hra->shape[i] = 2;
+									hras->shape[i] = 2;
+									i++;						
+								}
+							}
+							auto& mvv = hra->mapVarInt();						
+							for (std::size_t i = 0; i < na; i++)
+							{
+								for (std::size_t j = 0; j < za; j++)
+								{
+									{
+										auto v = raa[j*na + i];
+										if (v)
+										{
+											{
+												auto iw = mvv.find(v);
+												if (iw != mvv.end())
+													rra[iw->second * za + j] = 1;
+											}
+											auto iv = slppa.find(v);
+											while (iv != slppa.end())
+											{
+												auto iw = mvv.find(iv->second);
+												if (iw != mvv.end())
+													rra[iw->second * za + j] = 1;
+												iv = slppa.find(iv->second);
+											}
+										}								
+									}
+									{
+										auto v = ras[j*na + i];
+										if (v)
+										{
+											{
+												auto iw = mvv.find(v);
+												if (iw != mvv.end())
+													rras[iw->second * za + j] = 1;
+											}
+											auto iv = slppa.find(v);
+											while (iv != slppa.end())
+											{
+												auto iw = mvv.find(iv->second);
+												if (iw != mvv.end())
+													rras[iw->second * za + j] = 1;
+												iv = slppa.find(iv->second);
+											}
+										}								
+									}
+								}						
+							}													
+						}					
+						if (hr)
+						{
+							hr = hrjoin(HistoryRepaPtrList{std::move(hr),std::move(hra)});
+							hrs = hrjoin(HistoryRepaPtrList{std::move(hrs),std::move(hras)});
+						}
+						else
+						{
+							hr = std::move(hra);
+							hrs = std::move(hras);
+						}	
+					}
+					// check consistent reduction
+					if (ok)
+					{
+						ok = ok && hr && hrs 
+							&& hr->dimension == (qqr.size() + qqa.size()) 
+							&& hr->dimension == hrs->dimension 
+							&& hr->size == sliceSizeA
+							&& hr->size == hrs->size;
+						if (!ok)
+						{
+							LOG "induce\tslice: " << sliceA << "\terror: inconsistent reduction" UNLOG
+						}	
+					}
+					if (ok && this->logging)
+					{
+						std::lock_guard<std::mutex> guard(this->mutex);	
+						LOG "induce model\tslice: " << sliceA << "\tdimension: " << hr->dimension << "\tsize: " << hr->size UNLOG
+					}						
+					// layerer
+					if (ok)
+					{
+						try
+						{
+							SizeList vv;
+							{
+								auto n = hr->dimension;
+								auto vv1 = hr->vectorVar;
+								vv.reserve(n);
+								for (std::size_t i = 0; i < n; i++)
+									vv.push_back(vv1[i]);
+							}
+							auto t = layerer(pp.wmax, pp.lmax, pp.xmax, pp.omax, pp.bmax, pp.mmax, pp.umax, pp.pmax, pp.tint, vv, *hr, *hrs, layerer_log, this->logging && pp.logging, varA);
+							fr = std::move(std::get<0>(t));
+							auto mm = std::move(std::get<1>(t));
+							fail = !fr || (!mm || !mm->size());
+							if (ok && !fail)
+							{
+								kk = mm->back().second;
+								SizeUSet kk1(kk.begin(), kk.end());
+								SizeUSet vv1(vv.begin(), vv.end());
+								fr = llfr(vv1, *frdep(*fr, kk1));
+								frSize = fudRepasSize(*fr);
+								algn = mm->back().first;
+								auto m = kk.size();
+								auto z = hr->size;
+								diagonal = 100.0*(exp(algn/z/(m-1))-1.0);
+								fail = pp.diagonalMin > 0.0 && diagonal < pp.diagonalMin;
+							}
+						}
+						catch (const std::out_of_range& e)
+						{
+							ok = false;
+							LOG "induce\tslice: " << sliceA << "\tout of range exception: " << e.what() UNLOG
+						}
+						if (ok && this->logging)
+						{
+							std::lock_guard<std::mutex> guard(this->mutex);	
+							if (!fail)
+							{
+								LOG "induce model\tslice: " << sliceA << "\tder vars algn density: " << algn << "\timpl bi-valency percent: " << diagonal << "\tder vars cardinality: " << kk.size() << "\tfud cardinality: " << frSize UNLOG							
+							}
+							else
+							{
+								LOG "induce model\tslice: " << sliceA << "\tno alignment\tder vars algn density: " << algn << "\timpl bi-valency percent: " << diagonal UNLOG
+							}
+						}	
+					}
+				}
+				if (ok && this->logging)
+				{
+					std::lock_guard<std::mutex> guard(this->mutex);	
+					LOG "induce model\tslice: " << sliceA << "\ttime " << ((sec)(clk::now() - mark)).count() << "s" UNLOG
+				}				
+			}
+			// add new fud to locked active and update
+			if (ok && !fail)	
+			{
+				auto mark = (ok && this->logging) ? clk::now() : std::chrono::time_point<clk>();
+				std::lock_guard<std::mutex> guard(this->mutex);		
+				// check active system
+				if (ok)
+				{
+					ok = ok && this->system;
+					if (!ok)
+					{
+						LOG "induce\tslice: " << sliceA << "\terror: no system" UNLOG
+					}	
+				}
+				// remap kk and fr with block ids
+				if (ok)
+				{
+					if (frSize > ((std::size_t)1 << this->bits))
+					{
+						ok = false;
+						LOG "induce\tslice: " << sliceA << "\terror: block too small" << "\tfud size: " << frSize << "\tblock: " << (1 << this->bits) UNLOG
+					}
+					if (((this->var + frSize) >> this->bits) > (this->var >> this->bits))
+						this->var = this->system->next(this->bits);
+					SizeSizeUMap nn;
+					nn.reserve(frSize);
+					for (auto& ll : fr->layers)
+						for (auto& tr : ll)
+						{
+							nn[tr->derived] = this->var;					
+							this->var++;
+						}
+					fr->reframe_u(nn);
+					for (std::size_t i = 0; i < kk.size(); i++)	
+						kk[i] = nn[kk[i]];	
+				}				
+				std::size_t v = 0;
+				SizeList sl;
+				// create the slices
+				if (ok)
+				{		
+					if (!this->decomp)
+						this->decomp = std::make_unique<DecompFudSlicedRepa>();
+					auto m = kk.size();
+					auto ar = hrred(1.0, m, kk.data(), *frmul(pp.tint, *hr, *fr));
+					std::size_t sz = 1;
+					auto skk = ar->shape;
+					auto rr0 = ar->arr;
+					for (std::size_t i = 0; i < m; i++)
+						sz *= skk[i];
+					sl.reserve(sz);
+					fr->layers.push_back(TransformRepaPtrList());
+					auto& ll = fr->layers.back();
+					ll.reserve(sz);					
+					if (sz > ((std::size_t)1 << this->bits))
+					{
+						ok = false;
+						LOG "induce\tslice: " << sliceA << "\terror: block too small" << "\tslice size: " << sz << "\tblock: " << (1 << this->bits) UNLOG
+					}
+					if (((this->varSlice + sz) >> this->bits) > (this->varSlice >> this->bits))
+						this->varSlice = this->system->next(this->bits);					
+					bool remainder = false;
+					for (std::size_t i = 0; i < sz; i++)
+					{
+						if (rr0[i] <= 0.0)
+						{
+							remainder = true;
+							continue;
+						}
+						auto tr = std::make_shared<TransformRepa>();
+						if (sliceA)
+						{
+							tr->dimension = m + 1;
+							tr->vectorVar = new std::size_t[m + 1];
+							auto ww = tr->vectorVar;
+							tr->shape = new std::size_t[m + 1];
+							auto sh = tr->shape;
+							ww[0] = sliceA;
+							sh[0] = 2;
+							for (std::size_t j = 0; j < m; j++)
+							{
+								ww[j + 1] = kk[j];
+								sh[j + 1] = skk[j];
+							}
+							tr->arr = new unsigned char[2 * sz];
+							auto rr = tr->arr;
+							for (std::size_t j = 0; j < 2 * sz; j++)
+								rr[j] = 0;
+							rr[sz + i] = 1;
+						}
+						else
+						{
+							tr->dimension = m;
+							tr->vectorVar = new std::size_t[m];
+							auto ww = tr->vectorVar;
+							tr->shape = new std::size_t[m];
+							auto sh = tr->shape;
+							for (std::size_t j = 0; j < m; j++)
+							{
+								ww[j] = kk[j];
+								sh[j] = skk[j];
+							}
+							tr->arr = new unsigned char[sz];
+							auto rr = tr->arr;
+							for (std::size_t j = 0; j < sz; j++)
+								rr[j] = 0;
+							rr[i] = 1;
+						}
+						tr->valency = 2;						
+						auto w = this->varSlice;
+						this->varSlice++;
+						tr->derived = w;
+						sl.push_back(w);
+						ll.push_back(tr);
+					}
+					if (remainder)
+					{
+						auto tr = std::make_shared<TransformRepa>();
+						if (sliceA)
+						{
+							tr->dimension = m + 1;
+							tr->vectorVar = new std::size_t[m + 1];
+							auto ww = tr->vectorVar;
+							tr->shape = new std::size_t[m + 1];
+							auto sh = tr->shape;
+							ww[0] = sliceA;
+							sh[0] = 2;
+							for (std::size_t j = 0; j < m; j++)
+							{
+								ww[j + 1] = kk[j];
+								sh[j + 1] = skk[j];
+							}
+							tr->arr = new unsigned char[2 * sz];
+							auto rr = tr->arr;
+							for (std::size_t j = 0; j < 2 * sz; j++)
+								rr[j] = j >= sz && rr0[j - sz] <= 0.0 ? 1 : 0;
+						}
+						else
+						{
+							tr->dimension = m;
+							tr->vectorVar = new std::size_t[m];
+							auto ww = tr->vectorVar;
+							tr->shape = new std::size_t[m];
+							auto sh = tr->shape;
+							for (std::size_t j = 0; j < m; j++)
+							{
+								ww[j] = kk[j];
+								sh[j] = skk[j];
+							}
+							tr->arr = new unsigned char[sz];
+							auto rr = tr->arr;
+							for (std::size_t j = 0; j < sz; j++)
+								rr[j] = rr0[j] <= 0.0 ? 1 : 0;
+						}
+						tr->valency = 2;
+						auto w = this->varSlice;
+						this->varSlice++;
+						tr->derived = w;
+						sl.push_back(w);
+						ll.push_back(tr);
+					}
+				}
+				// update this decomp mapVarParent and mapVarInt
+				if (ok)
+				{
+					auto& dr = *this->decomp;
+					dr.fuds.push_back(FudSlicedStruct());
+					auto& fs = dr.fuds.back();
+					fs.parent = sliceA;
+					fs.children = sl;
+					fs.fud.reserve(frSize + sl.size());
+					for (auto& ii : fr->layers)
+						for (auto& tr : ii)
+							fs.fud.push_back(tr);
+					dr.fudRepasSize += fs.fud.size();
+					auto& vi = dr.mapVarInt();
+					vi[sliceA] = dr.fuds.size() - 1;
+					auto& cv = dr.mapVarParent();
+					for (auto s : sl)
+						cv[s] = sliceA;
+				}
+				// check historySparse
+				if (ok)
+				{
+					ok = ok && this->historySparse && this->historySparse->arr;
+					if (!ok)
+					{
+						LOG "induce update\tslice: " << sliceA << "\terror: historySparse not initialised" UNLOG
+					}
+				}
+				// update historySparse and historySlicesSetEvent
+				if (ok)
+				{
+					if (sliceA)
+					{
+						auto z = hr->size;
+						auto hrr = std::make_unique<HistoryRepa>();
+						hrr->dimension = 1;
+						hrr->vectorVar = new std::size_t[1];
+						hrr->vectorVar[0] = sliceA;
+						hrr->shape = new std::size_t[1];
+						hrr->shape[0] = 2;
+						hrr->size = z;
+						hrr->evient = hr->evient;
+						hrr->arr = new unsigned char[z];
+						auto rrr = hrr->arr;		
+						for (std::size_t j = 0; j < z; j++)
+							rrr[j] = 1;
+						hr = hrjoin(HistoryRepaPtrList{std::move(hr),std::move(hrr)});
+					}
+					hr = hrhrred(sl.size(), sl.data(), *frmul(pp.tint, *hr, *fr));
+					auto n = hr->dimension;
+					auto vv = hr->vectorVar;
+					auto z = hr->size;
+					auto rr = hr->arr;	
+					auto ev = eventsA.data();
+					SizeSet slices;
+					for (std::size_t j = 0; j < z; j++)
+						for (std::size_t i = 0; i < n; i++)
+						{
+							auto u = rr[i*z + j];
+							if (u)
+							{
+								auto sliceB = vv[i];
+								auto eventA = ev[j];
+								this->historySparse->arr[eventA] = sliceB;
+								this->historySlicesSetEvent[sliceA].erase(eventA);
+								this->historySlicesSetEvent[sliceB].insert(eventA);
+								slices.insert(sliceB);
+								break;
+							}
+						}
+					for (auto sliceB : slices)
+						if (this->historySlicesSetEvent[sliceB].size() >= induceThreshold)
+							this->induceSlices.insert(sliceB);
+					this->induceSlices.erase(sliceA);
+					this->induceSliceFailsSize.erase(sliceA);
+				}
+				// tidy new events
+				if (ok)
+				{
+					auto eventsB = this->historySlicesSetEvent[sliceA];
+					if (eventsB.size())
+					{
+						SizeSet slices;
+						for (auto eventB : eventsB)
+						{
+							SizeUCharStructList jj;
+							if (ok)
+							{
+								SizeList frameUnderlyingsA(this->frameUnderlyings);
+								if (!frameUnderlyingsA.size())
+									frameUnderlyingsA.push_back(0);	
+								std::size_t m = 0;
+								for (auto& hr : this->underlyingHistoryRepa)
+									m += hr->dimension*frameUnderlyingsA.size();
+								m += 50*this->underlyingHistorySparse.size()*frameUnderlyingsA.size();
+								m += 50*this->frameHistorys.size();
+								jj.reserve(m);
+								auto z = this->historySize;
+								auto over = this->historyOverflow;
+								auto j = eventB;
+								auto promote = this->underlyingOffsetIs;
+								auto& proms = this->underlyingsVarsOffset;
+								for (std::size_t g = 0; g < frameUnderlyingsA.size(); g++)
+								{
+									auto f = frameUnderlyingsA[g];
+									if (this->frameUnderlyingDynamicIs)
+									{
+										auto& frameUnderlyingsB = this->historyFrameUnderlying[j];
+										if (g < frameUnderlyingsB.size())
+											f = frameUnderlyingsB[g];
+										else
+											f = 0;
+									}
+									if (g && !f)
+										continue;
+									auto& mm = this->framesVarsOffset[g];
+									for (auto& hr : this->underlyingHistoryRepa)
+									{
+										auto n = hr->dimension;
+										auto vv = hr->vectorVar;
+										auto rr = hr->arr;	
+										for (std::size_t i = 0; i < n; i++)
+										{
+											SizeUCharStruct qq;
+											if (f <= j)
+												qq.uchar = rr[(j-f)*n + i];	
+											else if (f && over && z > f)
+												qq.uchar = rr[((j+z-f)%z)*n + i];	
+											else
+												qq.uchar = 0;
+											if (qq.uchar)
+											{
+												qq.size = vv[i];
+												if (f)
+													this->varPromote(mm, qq.size);
+												jj.push_back(qq);
+											}
+										}							
+									}
+									auto& slpp = this->underlyingSlicesParent;
+									std::size_t h = 0;									
+									for (auto& hr : this->underlyingHistorySparse)
+									{
+										std::size_t v = 0;
+										if (f <= j)
+											v = hr->arr[j-f];
+										else if (f && over && z > f)
+											v = hr->arr[(j+z-f)%z]; 
+										if (v)
+										{
+											{
+												SizeUCharStruct qq;
+												qq.uchar = 1;			
+												qq.size = v;
+												if (promote)
+													this->varPromote(proms[h], qq.size);
+												if (f)
+													this->varPromote(mm, qq.size);
+												jj.push_back(qq);
+											}								
+											auto it = slpp.find(v);
+											while (it != slpp.end())
+											{
+												SizeUCharStruct qq;
+												qq.uchar = 1;
+												qq.size = it->second;
+												if (!qq.size)
+													break;
+												if (promote)
+													this->varPromote(proms[h], qq.size);
+												if (f)
+													this->varPromote(mm, qq.size);
+												jj.push_back(qq);
+												it = slpp.find(it->second);
+											}										
+										}
+										h++;
+									}										
+								}
+								if (ok && this->decomp && this->historySparse && this->frameHistorys.size())
+								{
+									auto& hr = this->historySparse;
+									auto& slpp = this->decomp->mapVarParent();
+									for (std::size_t g = 0; g < this->frameHistorys.size(); g++)
+									{
+										std::size_t f = this->frameHistorys[g];
+										if (this->frameHistoryDynamicIs)
+										{
+											auto& frameHistorysB = this->historyFrameHistory[j];
+											if (g < frameHistorysB.size())
+												f = frameHistorysB[g];
+											else
+												f = 0;
+										}
+										if (!f)
+											continue;
+										auto& mm = this->framesVarsOffset[g];
+										std::size_t v = 0;
+										if (f <= j)
+											v = hr->arr[j-f];
+										else if (f && over && z > f)
+											v = hr->arr[(j+z-f)%z]; 
+										if (v)
+										{
+											{
+												SizeUCharStruct qq;
+												qq.uchar = 1;			
+												qq.size = v;
+												if (f)
+													this->varPromote(mm, qq.size);
+												jj.push_back(qq);
+											}								
+											auto it = slpp.find(v);
+											while (it != slpp.end())
+											{
+												SizeUCharStruct qq;
+												qq.uchar = 1;
+												qq.size = it->second;
+												if (!qq.size)
+													break;
+												if (f)
+													this->varPromote(mm, qq.size);
+												jj.push_back(qq);
+												it = slpp.find(it->second);
+											}										
+										}
+									}
+								}
+							}
+							std::unique_ptr<SizeList> ll;
+							if (ok)
+							{
+								ll = drmul(jj,*this->decomp,(unsigned char)(ppu.mapCapacity));	
+								ok = ok && ll && ll->size() && ll->back();
+								if (!ok)
+								{
+									LOG "induce update\tslice: " << sliceA << "\terror: drmul failed to return a list" UNLOG
+									break;
+								}						
+							}							
+							if (ok)
+							{
+								std::size_t	sliceB = ll->back();
+								this->historySparse->arr[eventB] = sliceB;
+								this->historySlicesSetEvent[sliceB].insert(eventB);	
+								slices.insert(sliceB);									
+							}
+						}
+						if (ok)
+						{
+							for (auto sliceB : slices)
+								if (this->induceThreshold && this->historySlicesSetEvent[sliceB].size() >= induceThreshold)
+									this->induceSlices.insert(sliceB);
+						}
+					}
+					this->historySlicesSetEvent.erase(sliceA);
+				}
+				// handle cached sizes and transitions
+				if (ok && this->historySliceCachingIs)
+				{
+					auto over = this->historyOverflow;
+					auto cont = this->continousIs;
+					auto& discont = this->continousHistoryEventsEvent;
+					auto z = this->historySize;
+					auto y = this->historyEvent;
+					auto rs = this->historySparse->arr;
+					auto& slices = this->historySlicesSetEvent;
+					auto& sizes = this->historySlicesSize;
+					auto& lengths = this->historySlicesLength;
+					auto& nexts = this->historySlicesSlicesSizeNext;
+					auto& prevs = this->historySlicesSliceSetPrev;					
+					for (auto sliceC : prevs[sliceA])
+					{
+						nexts[sliceC].erase(sliceA);
+						if (!nexts[sliceC].size())
+							nexts.erase(sliceC);
+					}
+					for (auto pp : nexts[sliceA])
+					{
+						auto sliceC = pp.first;
+						prevs[sliceC].erase(sliceA);
+						if (!prevs[sliceC].size())
+							prevs.erase(sliceC);
+					}
+					prevs.erase(sliceA);
+					nexts.erase(sliceA);
+					SizeSet events;
+					for (auto sliceB : sl)
+					{
+						lengths[sliceB] = lengths[sliceA] + 1;
+						auto slicesIt = slices.find(sliceB);
+						if (slicesIt != slices.end())
+						{
+							sizes[sliceB] = slicesIt->second.size();
+							events.insert(slicesIt->second.begin(),slicesIt->second.end());
+						}
+					}
+					for (auto ev : events)
+					{
+						auto sliceB = rs[ev];	
+						if ((over || ev) && ev != y && (!cont || !discont.count(ev)))
+						{
+							auto sliceC = rs[(ev+z-1)%z];	
+							if (sliceC != sliceB)
+							{
+								nexts[sliceC][sliceB]++;
+								prevs[sliceB].insert(sliceC);
+							}
+						}		
+						if (!events.count((ev+1)%z) 
+							&& ev != y-1 && (!cont || !discont.count((ev+1)%z)))
+						{
+							auto sliceC = rs[(ev+1)%z];		
+							if (sliceC != sliceB)
+							{
+								nexts[sliceB][sliceC]++;
+								prevs[sliceC].insert(sliceB);
+							}
+						}								
+					}
+				}				
+				if (ok && this->logging)
+				{
+					LOG "induce update\tslice: " << sliceA << "\tparent slice: " << v << "\tchildren cardinality: " << sl.size() << "\tfud size: " << this->decomp->fuds.back().fud.size() << "\tfud cardinality: " << this->decomp->fuds.size() << "\tmodel cardinality: " << this->decomp->fudRepasSize << "\ttime " << ((sec)(clk::now() - mark)).count() << "s" UNLOG
+				}	
+				if (ok && this->summary)
+				{
+					std::size_t sizeA = this->historyOverflow ? this->historySize : this->historyEvent;
+					if (sizeA)
+					{
+						LOG "induce summary\tslice: " << sliceA << "\tdiagonal: " << diagonal << "\tfud cardinality: " << this->decomp->fuds.size() << "\tmodel cardinality: " << this->decomp->fudRepasSize<< "\tfuds per threshold: " << (double)this->decomp->fuds.size() * this->induceThreshold / sizeA UNLOG					
+					}
+				}	
+				if (ok && induceCallback)
+				{
+					ok = ok && induceCallback(*this,sliceA,sliceSizeA);
+				}
+			}
+			if (ok && fail)
+			{
+				auto mark = (ok && this->logging) ? clk::now() : std::chrono::time_point<clk>();
+				std::lock_guard<std::mutex> guard(this->mutex);		
+				this->induceSliceFailsSize.insert_or_assign(sliceA, sliceSizeA);
+				if (ok && this->logging)
+				{
+					LOG "induce update fail\tslice: " << sliceA << "\tslice size: " << sliceSizeA << "\tfails: " << this->induceSliceFailsSize  << "\ttime " << ((sec)(clk::now() - mark)).count() << "s" UNLOG
+				}					
+			}
+		}
+	} 
+	catch (const std::exception& e) 
+	{
+		LOG "induce error\tslice: " << sliceA << " : " << e.what()  UNLOG
+		ok = false;
+	}
+	// remove from inducingSlices
+	{
+		std::lock_guard<std::mutex> guard(this->mutex);		
+		this->inducingSlices.erase(sliceA);
+	}
+	
+	return ok;
+}
+
 bool Alignment::Active::dump(const ActiveIOParameters& pp)
 {
 	bool ok = true;

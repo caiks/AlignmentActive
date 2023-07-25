@@ -65,6 +65,7 @@ namespace Alignment
 		std::size_t seed = 5;
 		double diagonalMin = 0.0;
 		std::set<std::size_t> induceThresholds;
+		std::size_t activeInduceThreadMax = 1;		
 		bool logging = false;
 	};
 	
@@ -128,6 +129,7 @@ namespace Alignment
 		SizeSet induceSlices;
 		SizeSet induceVarExclusions;
 		SizeSizeMap induceSliceFailsSize;
+		SizeSet inducingSlices;
 		
 		// if dynamic pad out empty frames with 0 so that frame vector length is constant
 		// if underlying current frame 0 is present in any it must be the first of all underlying frames
@@ -152,6 +154,8 @@ namespace Alignment
 		bool (*updateCallback)(Active& active, const SizeSet& eventsA, std::size_t eventA, std::size_t historyEventA, std::size_t sliceA);
 
 		bool induce(ActiveInduceParameters pp = ActiveInduceParameters(),
+					ActiveUpdateParameters ppu = ActiveUpdateParameters());
+		bool induce(std::size_t sliceA, ActiveInduceParameters pp = ActiveInduceParameters(),
 					ActiveUpdateParameters ppu = ActiveUpdateParameters());
 		bool (*induceCallback)(Active& active, std::size_t sliceA, std::size_t sliceSizeA);	
 
