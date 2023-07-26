@@ -797,28 +797,56 @@ bool Alignment::Active::update(ActiveUpdateParameters pp)
 }
 
 bool Alignment::Active::induce(ActiveInduceParameters pp, ActiveUpdateParameters ppu)
-{
-	auto hrred = setVarsHistoryRepasReduce_u;
-	auto hrhrred = setVarsHistoryRepasHistoryRepaReduced_u;
-	auto hrjoin = vectorHistoryRepasJoin_u;	
-	auto hrpr = setVarsHistoryRepasRed_u;
-	auto prents = histogramRepaRedsListEntropy;
-	auto hrshuffle = historyRepasShuffle_us;
-	auto hashuffle = historySparseArrayShuffle_us;
-	auto frvars = fudRepasSetVar;
-	auto frder = fudRepasDerived;
-	auto frund = fudRepasUnderlying;
-	auto llfr = setVariablesListTransformRepasFudRepa_u;
-	auto frmul = historyRepasFudRepasMultiply_up;
-	auto frdep = fudRepasSetVarsDepends;
-	auto drmul = listVarValuesDecompFudSlicedRepasPathSlice_u;
-	auto layerer = parametersLayererMaxRollByMExcludedSelfHighestLogIORepa_up;
-		
+{		
 	bool ok = true;
+	
 	try 
 	{
+		std::map<std::size_t,std::thread> threads;
+		if (pp.asyncThreadMax)
+			threads.reserve(pp.asyncThreadMax);
+
 		while (ok && !this->terminate)
 		{
+			// join any threads that have finished
+			if (ok)
+			{
+				SizeSet inducingSlicesA;		
+				{
+					std::lock_guard<std::mutex> guard(this->mutex);		
+					inducingSlicesA = this->inducingSlices;
+				}
+				SizeSet threadSlicesA;		
+				for (auto& pp : threads)
+					if (!inducingSlicesA.count(pp.first))
+					{
+						pp.second.join();
+						threadSlicesA.insert(pp.first);
+					}
+				for (auto sliceA : threadSlicesA)		
+					threads.erase(sliceA);
+			}
+			// TODO
+			// get largest slice
+			if (ok)
+			{
+				for (auto sliceB : this->induceSlices)
+				{
+					auto sliceSizeB = this->historySlicesSetEvent[sliceB].size();
+					if (sliceSizeB > sliceSizeA)
+					{
+						auto it = this->induceSliceFailsSize.find(sliceB);
+						if (it == this->induceSliceFailsSize.end() 
+							|| (it->second < sliceSizeB 
+								&& (!pp.induceThresholds.size() || pp.induceThresholds.count(sliceSizeB))))
+						{
+							sliceA = sliceB;
+							sliceSizeA = sliceSizeB;							
+						}
+					}
+				}				
+			}
+				
 			std::size_t varA = 0;
 			std::size_t sliceA = 0;
 			std::size_t sliceSizeA = 0;	
@@ -849,25 +877,8 @@ bool Alignment::Active::induce(ActiveInduceParameters pp, ActiveUpdateParameters
 						break;
 					}	
 				}			
-				// get largest slice
-				if (ok)
-				{
-					for (auto sliceB : this->induceSlices)
-					{
-						auto sliceSizeB = this->historySlicesSetEvent[sliceB].size();
-						if (sliceSizeB > sliceSizeA)
-						{
-							auto it = this->induceSliceFailsSize.find(sliceB);
-							if (it == this->induceSliceFailsSize.end() 
-								|| (it->second < sliceSizeB 
-									&& (!pp.induceThresholds.size() || pp.induceThresholds.count(sliceSizeB))))
-							{
-								sliceA = sliceB;
-								sliceSizeA = sliceSizeB;							
-							}
-						}
-					}				
-				}
+
+
 				// if there is a slice then process it otherwise return
 				if (!(ok && sliceSizeA)) 
 					break;
@@ -1931,6 +1942,12 @@ bool Alignment::Active::induce(ActiveInduceParameters pp, ActiveUpdateParameters
 					LOG "induce update fail\tslice: " << sliceA << "\tslice size: " << sliceSizeA << "\tfails: " << this->induceSliceFailsSize  << "\ttime " << ((sec)(clk::now() - mark)).count() << "s" UNLOG
 				}					
 			}
+		}
+	
+		if (ok)
+		{
+			for (auto& pp : threads)
+				pp.second.join();
 		}
 	} 
 	catch (const std::exception& e) 

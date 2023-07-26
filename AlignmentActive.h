@@ -65,7 +65,7 @@ namespace Alignment
 		std::size_t seed = 5;
 		double diagonalMin = 0.0;
 		std::set<std::size_t> induceThresholds;
-		std::size_t activeInduceThreadMax = 1;		
+		std::size_t asyncThreadMax = 0;		
 		bool logging = false;
 	};
 	
