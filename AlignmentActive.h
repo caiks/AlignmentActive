@@ -66,6 +66,7 @@ namespace Alignment
 		double diagonalMin = 0.0;
 		std::set<std::size_t> induceThresholds;
 		std::size_t asyncThreadMax = 0;		
+		std::size_t asyncInterval = 10;
 		bool logging = false;
 	};
 	
