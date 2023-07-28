@@ -98,7 +98,7 @@ std::ostream& operator<<(std::ostream& out, const ActiveEventsArray& ev)
 	return out;
 }
 
-Active::Active(std::string nameA) : name(nameA), terminate(false), log(log_default), layerer_log(layerer_log_default), historyOverflow(false), historyEvent(0), historySize(0), continousIs(false), bits(16), var(0), varSlice(0), induceThreshold(100), logging(false), summary(false), updateCallback(0),  induceCallback(0), client(0), historySliceCachingIs(false), historySliceCumulativeIs(false), frameUnderlyingDynamicIs(false), frameHistoryDynamicIs(false), underlyingOffsetIs(false)
+Active::Active(std::string nameA) : name(nameA), terminate(false), log(log_default), layerer_log(layerer_log_default), historyOverflow(false), historyEvent(0), historySize(0), continousIs(false), bits(16), var(0), varSlice(0), induceThreshold(100), updateProhibit(false), logging(false), summary(false), updateCallback(0),  induceCallback(0), client(0), historySliceCachingIs(false), historySliceCumulativeIs(false), frameUnderlyingDynamicIs(false), frameHistoryDynamicIs(false), underlyingOffsetIs(false)
 {
 }
 
@@ -843,7 +843,7 @@ bool Alignment::Active::induce(ActiveInduceParameters pp, ActiveUpdateParameters
 			while (ok && !this->terminate)
 			{
 				// join any threads that have finished
-				if (ok)
+				if (ok && threads.size())
 				{
 					SizeSet inducingSlicesA;
 					{
@@ -861,7 +861,7 @@ bool Alignment::Active::induce(ActiveInduceParameters pp, ActiveUpdateParameters
 						threads.erase(sliceA);
 				}
 				// get largest slice
-				if (ok)
+				if (ok && threads.size() < pp.asyncThreadMax)
 				{
 					std::size_t sliceA = 0;
 					std::size_t sliceSizeA = 0;	
@@ -892,6 +892,8 @@ bool Alignment::Active::induce(ActiveInduceParameters pp, ActiveUpdateParameters
 						threads.insert_or_assign(sliceA,std::thread(run_induce, std::ref(*this), sliceA, pp, ppu));
 					}
 				}
+				if (ok)
+					this->updateProhibit = threads.size() == pp.asyncThreadMax;
 				if (ok && pp.asyncInterval)
 					std::this_thread::sleep_for(std::chrono::milliseconds(pp.asyncInterval));
 				else if (ok)
@@ -2005,6 +2007,11 @@ bool Alignment::Active::induce(std::size_t sliceA, ActiveInduceParameters pp, Ac
 						}								
 					}
 				}				
+				// remove from inducingSlices if running async
+				if (ok && pp.asyncThreadMax)
+				{
+					this->inducingSlices.erase(sliceA);
+				}
 				if (ok && this->logging)
 				{
 					LOG "induce update\tslice: " << std::hex << sliceA << std::dec << "\tparent slice: " << v << "\tchildren cardinality: " << sl.size() << "\tfud size: " << this->decomp->fuds.back().fud.size() << "\tfud cardinality: " << this->decomp->fuds.size() << "\tmodel cardinality: " << this->decomp->fudRepasSize << "\ttime " << ((sec)(clk::now() - mark)).count() << "s" UNLOG
@@ -2030,6 +2037,11 @@ bool Alignment::Active::induce(std::size_t sliceA, ActiveInduceParameters pp, Ac
 				auto mark = (ok && this->logging) ? clk::now() : std::chrono::time_point<clk>();
 				std::lock_guard<std::mutex> guard(this->mutex);		
 				this->induceSliceFailsSize.insert_or_assign(sliceA, sliceSizeA);
+				// remove from inducingSlices if running async
+				if (ok && pp.asyncThreadMax)
+				{
+					this->inducingSlices.erase(sliceA);
+				}
 				if (ok && this->logging)
 				{
 					LOG "induce update fail\tslice: " << std::hex << sliceA << std::dec << "\tslice size: " << sliceSizeA << "\tfails: " << this->induceSliceFailsSize  << "\ttime " << ((sec)(clk::now() - mark)).count() << "s" UNLOG
@@ -2041,12 +2053,6 @@ bool Alignment::Active::induce(std::size_t sliceA, ActiveInduceParameters pp, Ac
 	{
 		LOG "induce error\tslice: " << std::hex << sliceA << std::dec << " : " << e.what()  UNLOG
 		ok = false;
-	}
-	// remove from inducingSlices if running async
-	if (ok && pp.asyncThreadMax)
-	{
-		std::lock_guard<std::mutex> guard(this->mutex);		
-		this->inducingSlices.erase(sliceA);
 	}
 	if (!ok)
 		this->terminate = true;

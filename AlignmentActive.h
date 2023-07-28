@@ -131,6 +131,7 @@ namespace Alignment
 		SizeSet induceVarExclusions;
 		SizeSizeMap induceSliceFailsSize;
 		SizeSet inducingSlices;
+		bool updateProhibit;
 		
 		// if dynamic pad out empty frames with 0 so that frame vector length is constant
 		// if underlying current frame 0 is present in any it must be the first of all underlying frames
