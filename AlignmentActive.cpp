@@ -2014,7 +2014,10 @@ bool Alignment::Active::induce(std::size_t sliceA, ActiveInduceParameters pp, Ac
 					std::size_t sizeA = this->historyOverflow ? this->historySize : this->historyEvent;
 					if (sizeA)
 					{
-						LOG "induce summary\tslice: " << std::hex << sliceA << std::dec << "\tdiagonal: " << diagonal << "\tfud cardinality: " << this->decomp->fuds.size() << "\tmodel cardinality: " << this->decomp->fudRepasSize<< "\tfuds per threshold: " << (double)this->decomp->fuds.size() * this->induceThreshold / sizeA UNLOG					
+						const std::time_t t_c = std::chrono::system_clock::to_time_t(clk::now());
+						std::string ts(std::ctime(&t_c));
+						ts.pop_back();
+						LOG "induce summary\tslice: " << std::hex << sliceA << std::dec << "\tdiagonal: " << diagonal << "\tfud cardinality: " << this->decomp->fuds.size() << "\tmodel cardinality: " << this->decomp->fudRepasSize<< "\tfuds per threshold: " << (double)this->decomp->fuds.size() * this->induceThreshold / sizeA << "\tat: " << ts.c_str() UNLOG
 					}
 				}	
 				if (ok && induceCallback)
