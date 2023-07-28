@@ -682,7 +682,7 @@ bool Alignment::Active::update(ActiveUpdateParameters pp)
 					}
 					if (ok && this->logging)
 					{
-						LOG "update apply\tevent id: " << eventA << "\thistory id: " << this->historyEvent << "\tslice: " << sliceA << "\tslice size: " << this->historySlicesSetEvent[sliceA].size() << "\ttime " << ((sec)(clk::now() - mark)).count() << "s" UNLOG
+						LOG "update apply\tevent id: " << eventA << "\thistory id: " << this->historyEvent << "\tslice: " << std::hex << sliceA << std::dec << "\tslice size: " << this->historySlicesSetEvent[sliceA].size() << "\ttime " << ((sec)(clk::now() - mark)).count() << "s" UNLOG
 					}
 				}
 				// increment historyEvent
@@ -965,7 +965,7 @@ bool Alignment::Active::induce(std::size_t sliceA, ActiveInduceParameters pp, Ac
 						ok = ok && hr && hr->size == this->historySize && hr->capacity == 1;
 					if (!ok)
 					{
-						LOG "induce\tslice: " << sliceA << "\terror: inconsistent underlying" UNLOG
+						LOG "induce\tslice: " << std::hex << sliceA << std::dec << "\terror: inconsistent underlying" UNLOG
 					}	
 				}			
 				// get slice size
@@ -1194,7 +1194,7 @@ bool Alignment::Active::induce(std::size_t sliceA, ActiveInduceParameters pp, Ac
 				}
 				if (ok && this->logging)
 				{
-					LOG "induce copy\tslice: " << sliceA << "\tslice size: " << sliceSizeA << "\trepa dimension: " << (hrr ? hrr->dimension : 0) << "\tsparse capacity: " << (haa ? haa->capacity : 0) << "\tsparse paths: " << slppa.size() << "\tvariable: " << varA << "\ttime " << ((sec)(clk::now() - mark)).count() << "s" UNLOG
+					LOG "induce copy\tslice: " << std::hex << sliceA << std::dec << "\tslice size: " << sliceSizeA << "\trepa dimension: " << (hrr ? hrr->dimension : 0) << "\tsparse capacity: " << (haa ? haa->capacity : 0) << "\tsparse paths: " << slppa.size() << "\tvariable: " << varA << "\ttime " << ((sec)(clk::now() - mark)).count() << "s" UNLOG
 				}	
 			}
 			// check consistent copy
@@ -1205,7 +1205,7 @@ bool Alignment::Active::induce(std::size_t sliceA, ActiveInduceParameters pp, Ac
 				ok = ok && (!haa || (haa->capacity > 0 && haa->size == sliceSizeA && haa->arr));
 				if (!ok)
 				{
-					LOG "induce\tslice: " << sliceA << "\terror: inconsistent copy" UNLOG
+					LOG "induce\tslice: " << std::hex << sliceA << std::dec << "\terror: inconsistent copy" UNLOG
 				}	
 			}
 			bool fail = false;
@@ -1329,11 +1329,11 @@ bool Alignment::Active::induce(std::size_t sliceA, ActiveInduceParameters pp, Ac
 						std::lock_guard<std::mutex> guard(this->mutex);	
 						if (!fail)
 						{
-							LOG "induce model\tslice: " << sliceA << "\trepa dimension: " << qqr.size() << "\tsparse dimension: " << qqa.size() UNLOG							
+							LOG "induce model\tslice: " << std::hex << sliceA << std::dec << "\trepa dimension: " << qqr.size() << "\tsparse dimension: " << qqa.size() UNLOG							
 						}
 						else
 						{
-							LOG "induce model\tslice: " << sliceA << "\tno entropy"  UNLOG
+							LOG "induce model\tslice: " << std::hex << sliceA << std::dec << "\tno entropy"  UNLOG
 						}
 					}	
 				}	
@@ -1458,13 +1458,13 @@ bool Alignment::Active::induce(std::size_t sliceA, ActiveInduceParameters pp, Ac
 							&& hr->size == hrs->size;
 						if (!ok)
 						{
-							LOG "induce\tslice: " << sliceA << "\terror: inconsistent reduction" UNLOG
+							LOG "induce\tslice: " << std::hex << sliceA << std::dec << "\terror: inconsistent reduction" UNLOG
 						}	
 					}
 					if (ok && this->logging)
 					{
 						std::lock_guard<std::mutex> guard(this->mutex);	
-						LOG "induce model\tslice: " << sliceA << "\tdimension: " << hr->dimension << "\tsize: " << hr->size UNLOG
+						LOG "induce model\tslice: " << std::hex << sliceA << std::dec << "\tdimension: " << hr->dimension << "\tsize: " << hr->size UNLOG
 					}						
 					// layerer
 					if (ok)
@@ -1500,18 +1500,18 @@ bool Alignment::Active::induce(std::size_t sliceA, ActiveInduceParameters pp, Ac
 						catch (const std::out_of_range& e)
 						{
 							ok = false;
-							LOG "induce\tslice: " << sliceA << "\tout of range exception: " << e.what() UNLOG
+							LOG "induce\tslice: " << std::hex << sliceA << std::dec << "\tout of range exception: " << e.what() UNLOG
 						}
 						if (ok && this->logging)
 						{
 							std::lock_guard<std::mutex> guard(this->mutex);	
 							if (!fail)
 							{
-								LOG "induce model\tslice: " << sliceA << "\tder vars algn density: " << algn << "\timpl bi-valency percent: " << diagonal << "\tder vars cardinality: " << kk.size() << "\tfud cardinality: " << frSize UNLOG							
+								LOG "induce model\tslice: " << std::hex << sliceA << std::dec << "\tder vars algn density: " << algn << "\timpl bi-valency percent: " << diagonal << "\tder vars cardinality: " << kk.size() << "\tfud cardinality: " << frSize UNLOG							
 							}
 							else
 							{
-								LOG "induce model\tslice: " << sliceA << "\tno alignment\tder vars algn density: " << algn << "\timpl bi-valency percent: " << diagonal UNLOG
+								LOG "induce model\tslice: " << std::hex << sliceA << std::dec << "\tno alignment\tder vars algn density: " << algn << "\timpl bi-valency percent: " << diagonal UNLOG
 							}
 						}	
 					}
@@ -1519,7 +1519,7 @@ bool Alignment::Active::induce(std::size_t sliceA, ActiveInduceParameters pp, Ac
 				if (ok && this->logging)
 				{
 					std::lock_guard<std::mutex> guard(this->mutex);	
-					LOG "induce model\tslice: " << sliceA << "\ttime " << ((sec)(clk::now() - mark)).count() << "s" UNLOG
+					LOG "induce model\tslice: " << std::hex << sliceA << std::dec << "\ttime " << ((sec)(clk::now() - mark)).count() << "s" UNLOG
 				}				
 			}
 			// add new fud to locked active and update
@@ -1533,7 +1533,7 @@ bool Alignment::Active::induce(std::size_t sliceA, ActiveInduceParameters pp, Ac
 					ok = ok && this->system;
 					if (!ok)
 					{
-						LOG "induce\tslice: " << sliceA << "\terror: no system" UNLOG
+						LOG "induce\tslice: " << std::hex << sliceA << std::dec << "\terror: no system" UNLOG
 					}	
 				}
 				// remap kk and fr with block ids
@@ -1542,7 +1542,7 @@ bool Alignment::Active::induce(std::size_t sliceA, ActiveInduceParameters pp, Ac
 					if (frSize > ((std::size_t)1 << this->bits))
 					{
 						ok = false;
-						LOG "induce\tslice: " << sliceA << "\terror: block too small" << "\tfud size: " << frSize << "\tblock: " << (1 << this->bits) UNLOG
+						LOG "induce\tslice: " << std::hex << sliceA << std::dec << "\terror: block too small" << "\tfud size: " << frSize << "\tblock: " << (1 << this->bits) UNLOG
 					}
 					if (((this->var + frSize) >> this->bits) > (this->var >> this->bits))
 						this->var = this->system->next(this->bits);
@@ -1579,7 +1579,7 @@ bool Alignment::Active::induce(std::size_t sliceA, ActiveInduceParameters pp, Ac
 					if (sz > ((std::size_t)1 << this->bits))
 					{
 						ok = false;
-						LOG "induce\tslice: " << sliceA << "\terror: block too small" << "\tslice size: " << sz << "\tblock: " << (1 << this->bits) UNLOG
+						LOG "induce\tslice: " << std::hex << sliceA << std::dec << "\terror: block too small" << "\tslice size: " << sz << "\tblock: " << (1 << this->bits) UNLOG
 					}
 					if (((this->varSlice + sz) >> this->bits) > (this->varSlice >> this->bits))
 						this->varSlice = this->system->next(this->bits);					
@@ -1709,7 +1709,7 @@ bool Alignment::Active::induce(std::size_t sliceA, ActiveInduceParameters pp, Ac
 					ok = ok && this->historySparse && this->historySparse->arr;
 					if (!ok)
 					{
-						LOG "induce update\tslice: " << sliceA << "\terror: historySparse not initialised" UNLOG
+						LOG "induce update\tslice: " << std::hex << sliceA << std::dec << "\terror: historySparse not initialised" UNLOG
 					}
 				}
 				// update historySparse and historySlicesSetEvent
@@ -1920,7 +1920,7 @@ bool Alignment::Active::induce(std::size_t sliceA, ActiveInduceParameters pp, Ac
 								ok = ok && ll && ll->size() && ll->back();
 								if (!ok)
 								{
-									LOG "induce update\tslice: " << sliceA << "\terror: drmul failed to return a list" UNLOG
+									LOG "induce update\tslice: " << std::hex << sliceA << std::dec << "\terror: drmul failed to return a list" UNLOG
 									break;
 								}						
 							}							
@@ -2007,14 +2007,14 @@ bool Alignment::Active::induce(std::size_t sliceA, ActiveInduceParameters pp, Ac
 				}				
 				if (ok && this->logging)
 				{
-					LOG "induce update\tslice: " << sliceA << "\tparent slice: " << v << "\tchildren cardinality: " << sl.size() << "\tfud size: " << this->decomp->fuds.back().fud.size() << "\tfud cardinality: " << this->decomp->fuds.size() << "\tmodel cardinality: " << this->decomp->fudRepasSize << "\ttime " << ((sec)(clk::now() - mark)).count() << "s" UNLOG
+					LOG "induce update\tslice: " << std::hex << sliceA << std::dec << "\tparent slice: " << v << "\tchildren cardinality: " << sl.size() << "\tfud size: " << this->decomp->fuds.back().fud.size() << "\tfud cardinality: " << this->decomp->fuds.size() << "\tmodel cardinality: " << this->decomp->fudRepasSize << "\ttime " << ((sec)(clk::now() - mark)).count() << "s" UNLOG
 				}	
 				if (ok && this->summary)
 				{
 					std::size_t sizeA = this->historyOverflow ? this->historySize : this->historyEvent;
 					if (sizeA)
 					{
-						LOG "induce summary\tslice: " << sliceA << "\tdiagonal: " << diagonal << "\tfud cardinality: " << this->decomp->fuds.size() << "\tmodel cardinality: " << this->decomp->fudRepasSize<< "\tfuds per threshold: " << (double)this->decomp->fuds.size() * this->induceThreshold / sizeA UNLOG					
+						LOG "induce summary\tslice: " << std::hex << sliceA << std::dec << "\tdiagonal: " << diagonal << "\tfud cardinality: " << this->decomp->fuds.size() << "\tmodel cardinality: " << this->decomp->fudRepasSize<< "\tfuds per threshold: " << (double)this->decomp->fuds.size() * this->induceThreshold / sizeA UNLOG					
 					}
 				}	
 				if (ok && induceCallback)
@@ -2029,14 +2029,14 @@ bool Alignment::Active::induce(std::size_t sliceA, ActiveInduceParameters pp, Ac
 				this->induceSliceFailsSize.insert_or_assign(sliceA, sliceSizeA);
 				if (ok && this->logging)
 				{
-					LOG "induce update fail\tslice: " << sliceA << "\tslice size: " << sliceSizeA << "\tfails: " << this->induceSliceFailsSize  << "\ttime " << ((sec)(clk::now() - mark)).count() << "s" UNLOG
+					LOG "induce update fail\tslice: " << std::hex << sliceA << std::dec << "\tslice size: " << sliceSizeA << "\tfails: " << this->induceSliceFailsSize  << "\ttime " << ((sec)(clk::now() - mark)).count() << "s" UNLOG
 				}					
 			}
 		}
 	} 
 	catch (const std::exception& e) 
 	{
-		LOG "induce error\tslice: " << sliceA << " : " << e.what()  UNLOG
+		LOG "induce error\tslice: " << std::hex << sliceA << std::dec << " : " << e.what()  UNLOG
 		ok = false;
 	}
 	// remove from inducingSlices if running async
