@@ -824,7 +824,7 @@ bool Alignment::Active::induce(ActiveInduceParameters pp, ActiveUpdateParameters
 						auto it = this->induceSliceFailsSize.find(sliceB);
 						if (it == this->induceSliceFailsSize.end() 
 							|| (it->second < sliceSizeB 
-								&& (!pp.induceThresholds.size() || pp.induceThresholds.count(sliceSizeB))))
+								&& pp.induceThresholdExceeded(it->second, sliceSizeB)))
 						{
 							sliceA = sliceB;
 							sliceSizeA = sliceSizeB;							
@@ -861,13 +861,14 @@ bool Alignment::Active::induce(ActiveInduceParameters pp, ActiveUpdateParameters
 						threads.erase(sliceA);
 				}
 				// get largest slice
+				std::size_t sliceSizeMax = 0;	
 				if (ok && threads.size() < pp.asyncThreadMax)
 				{
 					std::size_t sliceA = 0;
 					std::size_t sliceSizeA = 0;	
 					for (auto sliceB : this->induceSlices)
 					{
-						if (!threads.count(sliceB))
+						if (pp.asyncUpdateLimit || !threads.count(sliceB))
 						{
 							auto sliceSizeB = this->historySlicesSetEvent[sliceB].size();
 							if (sliceSizeB > sliceSizeA)
@@ -875,10 +876,15 @@ bool Alignment::Active::induce(ActiveInduceParameters pp, ActiveUpdateParameters
 								auto it = this->induceSliceFailsSize.find(sliceB);
 								if (it == this->induceSliceFailsSize.end() 
 									|| (it->second < sliceSizeB 
-										&& (!pp.induceThresholds.size() || pp.induceThresholds.count(sliceSizeB))))
+										&& pp.induceThresholdExceeded(it->second, sliceSizeB)))
 								{
-									sliceA = sliceB;
-									sliceSizeA = sliceSizeB;							
+									if (!threads.count(sliceB))
+									{
+										sliceA = sliceB;
+										sliceSizeA = sliceSizeB;				
+									}
+									if (sliceSizeB > sliceSizeMax)
+										sliceSizeMax = sliceSizeB;
 								}
 							}
 						}
@@ -893,7 +899,9 @@ bool Alignment::Active::induce(ActiveInduceParameters pp, ActiveUpdateParameters
 					}
 				}
 				if (ok)
-					this->updateProhibit = threads.size() == pp.asyncThreadMax;
+					this->updateProhibit = 
+						(pp.asyncUpdateLimit && sliceSizeMax > pp.asyncUpdateLimit) 
+						|| threads.size() == pp.asyncThreadMax;
 				if (ok && pp.asyncInterval)
 					std::this_thread::sleep_for(std::chrono::milliseconds(pp.asyncInterval));
 				else if (ok)

@@ -65,8 +65,25 @@ namespace Alignment
 		std::size_t seed = 5;
 		double diagonalMin = 0.0;
 		std::set<std::size_t> induceThresholds;
+		inline bool induceThresholdExceeded(std::size_t prev, std::size_t curr) const
+		{
+			bool exceeded = false;
+			for (auto t : induceThresholds)
+				if (t <= curr)
+				{
+					if (prev < t)
+					{
+						exceeded = true;
+						break;
+					}
+				}
+				else
+					break;
+			return exceeded;
+		}
 		std::size_t asyncThreadMax = 0;		
 		std::size_t asyncInterval = 10;
+		std::size_t asyncUpdateLimit = 0;
 		bool logging = false;
 	};
 	
