@@ -682,7 +682,7 @@ bool Alignment::Active::update(ActiveUpdateParameters pp)
 					}
 					if (ok && this->logging)
 					{
-						LOG "update apply\tevent id: " << eventA << "\thistory id: " << this->historyEvent << "\tslice: " << std::hex << sliceA << std::dec << "\tslice size: " << this->historySlicesSetEvent[sliceA].size() << "\ttime " << ((sec)(clk::now() - mark)).count() << "s" UNLOG
+						LOG "update apply\tevent id: " << eventA << "\thistory id: " << this->historyEvent << "\tslice: " << std::hex << sliceA << std::dec << "\tslice size: " << this->historySlicesSetEvent[sliceA].size() << "\ttime: " << ((sec)(clk::now() - mark)).count() << "s" UNLOG
 					}
 				}
 				// increment historyEvent
@@ -1204,7 +1204,7 @@ bool Alignment::Active::induce(std::size_t sliceA, ActiveInduceParameters pp, Ac
 				}
 				if (ok && this->logging)
 				{
-					LOG "induce copy\tslice: " << std::hex << sliceA << std::dec << "\tslice size: " << sliceSizeA << "\trepa dimension: " << (hrr ? hrr->dimension : 0) << "\tsparse capacity: " << (haa ? haa->capacity : 0) << "\tsparse paths: " << slppa.size() << "\tvariable: " << varA << "\ttime " << ((sec)(clk::now() - mark)).count() << "s" UNLOG
+					LOG "induce copy\tslice: " << std::hex << sliceA << std::dec << "\tslice size: " << sliceSizeA << "\trepa dimension: " << (hrr ? hrr->dimension : 0) << "\tsparse capacity: " << (haa ? haa->capacity : 0) << "\tsparse paths: " << slppa.size() << "\tvariable: " << varA << "\ttime: " << ((sec)(clk::now() - mark)).count() << "s" UNLOG
 				}	
 			}
 			// check consistent copy
@@ -1339,7 +1339,7 @@ bool Alignment::Active::induce(std::size_t sliceA, ActiveInduceParameters pp, Ac
 						std::lock_guard<std::mutex> guard(this->mutex);	
 						if (!fail)
 						{
-							LOG "induce model\tslice: " << std::hex << sliceA << std::dec << "\trepa dimension: " << qqr.size() << "\tsparse dimension: " << qqa.size() UNLOG							
+							LOG "induce model\tslice: " << std::hex << sliceA << std::dec << "\trepa dimension: " << qqr.size() << "\tsparse dimension: " << qqa.size() UNLOG
 						}
 						else
 						{
@@ -1529,7 +1529,7 @@ bool Alignment::Active::induce(std::size_t sliceA, ActiveInduceParameters pp, Ac
 				if (ok && this->logging)
 				{
 					std::lock_guard<std::mutex> guard(this->mutex);	
-					LOG "induce model\tslice: " << std::hex << sliceA << std::dec << "\ttime " << ((sec)(clk::now() - mark)).count() << "s" UNLOG
+					LOG "induce model\tslice: " << std::hex << sliceA << std::dec << "\ttime: " << ((sec)(clk::now() - mark)).count() << "s" UNLOG
 				}				
 			}
 			// add new fud to locked active and update
@@ -2022,7 +2022,7 @@ bool Alignment::Active::induce(std::size_t sliceA, ActiveInduceParameters pp, Ac
 				}
 				if (ok && this->logging)
 				{
-					LOG "induce update\tslice: " << std::hex << sliceA << std::dec << "\tparent slice: " << v << "\tchildren cardinality: " << sl.size() << "\tfud size: " << this->decomp->fuds.back().fud.size() << "\tfud cardinality: " << this->decomp->fuds.size() << "\tmodel cardinality: " << this->decomp->fudRepasSize << "\ttime " << ((sec)(clk::now() - mark)).count() << "s" UNLOG
+					LOG "induce update\tslice: " << std::hex << sliceA << std::dec << "\tparent slice: " << v << "\tchildren cardinality: " << sl.size() << "\tfud size: " << this->decomp->fuds.back().fud.size() << "\tfud cardinality: " << this->decomp->fuds.size() << "\tmodel cardinality: " << this->decomp->fudRepasSize << "\ttime: " << ((sec)(clk::now() - mark)).count() << "s" UNLOG
 				}	
 				if (ok && this->summary)
 				{
@@ -2052,7 +2052,7 @@ bool Alignment::Active::induce(std::size_t sliceA, ActiveInduceParameters pp, Ac
 				}
 				if (ok && this->logging)
 				{
-					LOG "induce update fail\tslice: " << std::hex << sliceA << std::dec << "\tslice size: " << sliceSizeA << "\tfails: " << this->induceSliceFailsSize  << "\ttime " << ((sec)(clk::now() - mark)).count() << "s" UNLOG
+					LOG "induce update fail\tslice: " << std::hex << sliceA << std::dec << "\tslice size: " << sliceSizeA << "\tfails: " << this->induceSliceFailsSize  << "\ttime: " << ((sec)(clk::now() - mark)).count() << "s" UNLOG
 				}					
 			}
 		}
@@ -2373,7 +2373,7 @@ bool Alignment::Active::dump(const ActiveIOParameters& pp)
 		}
 		if (ok && this->logging)
 		{
-			LOG "dump\tfile name: " << pp.filename << "\ttime " << ((sec)(clk::now() - mark)).count() << "s" UNLOG
+			LOG "dump\tfile name: " << pp.filename << "\ttime: " << ((sec)(clk::now() - mark)).count() << "s" UNLOG
 		}	
 	} 
 	catch (const std::exception& e) 
@@ -2891,7 +2891,7 @@ bool Alignment::Active::load(const ActiveIOParameters& pp)
 		}
 		if (ok && this->logging)
 		{
-			LOG "load\tfile name: " << pp.filename << "\ttime " << ((sec)(clk::now() - mark)).count() << "s" UNLOG
+			LOG "load\tfile name: " << pp.filename << "\ttime: " << ((sec)(clk::now() - mark)).count() << "s" UNLOG
 		}	
 	} 
 	catch (const std::exception& e) 
