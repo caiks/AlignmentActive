@@ -146,6 +146,7 @@ namespace Alignment
 		std::size_t induceThreshold;
 		SizeSet induceSlices;
 		SizeSet induceVarExclusions;
+		SizeSet induceVarComputeds;
 		SizeSizeMap induceSliceFailsSize;
 		SizeSet inducingSlices;
 		bool updateProhibit;
@@ -168,6 +169,7 @@ namespace Alignment
 		std::size_t varDemote(const SizeSizeUMap&, std::size_t) const;		
 		
 		std::size_t varMax() const;
+		std::size_t varComputedMax() const;
 		
 		bool update(ActiveUpdateParameters pp = ActiveUpdateParameters());
 		bool (*updateCallback)(Active& active, const SizeSet& eventsA, std::size_t eventA, std::size_t historyEventA, std::size_t sliceA);

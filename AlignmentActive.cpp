@@ -48,16 +48,15 @@ std::size_t Alignment::ActiveSystem::next(int bitsA)
 	if (bitsA <= this->bits)
 	{
 		this->block++;
-		if (this->block > (std::size_t(-1) >> bits))
+		if (this->block > (std::size_t(-1) >> this->bits))
 			throw std::out_of_range("ActiveSystem::next");
-		return this->block << bits;
+		return this->block << this->bits;
 	}
-	std::size_t bitsDiff = bitsA - this->bits;
-	std::size_t blockA = ((this->block >> bitsDiff) + 1) << bitsDiff;
-	this->block  = blockA + ((std::size_t)1 << bitsDiff) - 1;
-	if (this->block > (std::size_t(-1) >> bits))
+	std::size_t blockA = this->block + 1;
+	this->block  = blockA + ((std::size_t)1 << (bitsA - this->bits)) - 1;
+	if (this->block > (std::size_t(-1) >> this->bits))
 		throw std::out_of_range("ActiveSystem::next");
-	return blockA << bits;
+	return blockA << this->bits;
 }
 
 ActiveEventsRepa::ActiveEventsRepa(std::size_t referencesA) : references(referencesA)
@@ -142,6 +141,14 @@ std::size_t Alignment::Active::varMax() const
 		for (auto& q : p.second)	
 			v = std::max(v,q.first+q.second);
 	return (((v >> this->bits) + 1) << this->bits) - 1;
+}
+
+std::size_t Alignment::Active::varComputedMax() const
+{
+	if (!induceVarComputeds.size())
+		return 0;	
+	std::size_t v = *induceVarComputeds.rbegin();
+	return (v << 12) + (8 << 8) + 255 + (1 << this->bits);
 }
 
 #define UNLOG ; log_str.flush(); this->log(*this, log_str.str());}
