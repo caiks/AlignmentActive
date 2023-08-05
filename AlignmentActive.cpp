@@ -298,6 +298,8 @@ bool Alignment::Active::update(ActiveUpdateParameters pp)
 					}
 					for (std::size_t h = 0; ok && h < hrs.size(); h++)
 					{
+						auto& comp = this->induceVarComputeds;
+						auto& slpp = this->underlyingSlicesParent;
 						auto& hr = *this->underlyingHistoryRepa[h];
 						auto z = hr.size;
 						auto n = hr.dimension;
@@ -306,6 +308,7 @@ bool Alignment::Active::update(ActiveUpdateParameters pp)
 						auto& hr1 = *hrs[h];
 						auto n1 = hr1.dimension;
 						auto vv1 = hr1.vectorVar;
+						auto sh1 = hr1.shape;
 						auto rr1 = hr1.arr;
 						auto j = this->historyEvent;
 						bool equiv = n == n1;
@@ -323,7 +326,7 @@ bool Alignment::Active::update(ActiveUpdateParameters pp)
 							{
 								for (std::size_t i = 0; i < n; i++)
 									rr[i*z + j] = rr1[i];
-							}							
+							}		
 						}
 						else
 						{
@@ -354,9 +357,27 @@ bool Alignment::Active::update(ActiveUpdateParameters pp)
 								}
 							}								
 						}
+						// if computed add to underlyingSlicesParent
+						for (std::size_t i = 0; i < n1; i++)
+							if (sh1[i] && comp.count(vv1[i]))
+							{
+								std::size_t b = 0; while (sh1[i]-1 >> b) b++;
+								if (b)
+								{
+									std::size_t v = (1 << this->bits) + (vv1[i] << 12) + (b << 8) + rr1[i];
+									if (!slpp.count(v))
+										for (int k = b-1; k > 0; k--)
+										{
+											std::size_t v1 = (1 << this->bits) + (vv1[i] << 12) + (k << 8) + (rr1[i] >> b-k);
+											slpp[v] = v1;
+											v = v1;
+										}
+								}
+							}
 					}
 					for (std::size_t h = 0; ok && h < has.size(); h++)
 					{
+						auto& slpp = this->underlyingSlicesParent;
 						auto& hr = *this->underlyingHistorySparse[h];
 						auto rr = hr.arr;
 						auto hr1 = has[h];
@@ -371,10 +392,10 @@ bool Alignment::Active::update(ActiveUpdateParameters pp)
 								break;
 							}
 						rr[j] = v;
-						if (v && this->underlyingSlicesParent.find(v) == this->underlyingSlicesParent.end())
+						if (v && slpp.find(v) == slpp.end())
 							for (int i = (int)n-1; i > 0; i--)
 								if (rr1[i] && rr1[i-1])
-									this->underlyingSlicesParent[rr1[i]] = rr1[i-1];
+									slpp[rr1[i]] = rr1[i-1];
 					}
 				}
 				// check decomp exists
@@ -402,20 +423,22 @@ bool Alignment::Active::update(ActiveUpdateParameters pp)
 					SizeUCharStructList jj;
 					if (ok)
 					{
+						auto& comp = this->induceVarComputeds;
+						auto& slpp = this->underlyingSlicesParent;						
+						auto promote = this->underlyingOffsetIs;
+						auto& proms = this->underlyingsVarsOffset;
 						SizeList frameUnderlyingsA(this->frameUnderlyings);
 						if (!frameUnderlyingsA.size())
 							frameUnderlyingsA.push_back(0);	
 						std::size_t m = 0;
 						for (auto& hr : this->underlyingHistoryRepa)
-							m += hr->dimension*frameUnderlyingsA.size();
+							m += 8*hr->dimension*frameUnderlyingsA.size();
 						m += 50*this->underlyingHistorySparse.size()*frameUnderlyingsA.size();
 						m += 50*this->frameHistorys.size();
 						jj.reserve(m);
 						auto z = this->historySize;
 						auto over = this->historyOverflow;
 						auto j = this->historyEvent;
-						auto promote = this->underlyingOffsetIs;
-						auto& proms = this->underlyingsVarsOffset;
 						for (std::size_t g = 0; g < frameUnderlyingsA.size(); g++)
 						{
 							auto f = frameUnderlyingsA[g];
@@ -426,6 +449,7 @@ bool Alignment::Active::update(ActiveUpdateParameters pp)
 							{
 								auto n = hr->dimension;
 								auto vv = hr->vectorVar;
+								auto sh = hr->shape;
 								auto rr = hr->arr;	
 								for (std::size_t i = 0; i < n; i++)
 								{
@@ -436,7 +460,20 @@ bool Alignment::Active::update(ActiveUpdateParameters pp)
 										qq.uchar = rr[((j+z-f)%z)*n + i];	
 									else
 										qq.uchar = 0;
-									if (qq.uchar)
+									if (sh[i] && comp.count(vv[i]))
+									{
+										std::size_t b = 0; while (sh[i]-1 >> b) b++;
+										for (int k = b; k > 0; k--)
+										{
+											SizeUCharStruct qq1;
+											qq1.uchar = 1;
+											qq1.size = (1 << this->bits) + (vv[i] << 12) + (k << 8) + (qq.uchar >> b-k);
+											if (f)
+												this->varPromote(mm, qq1.size);
+											jj.push_back(qq1);
+										}
+									}
+									else if (qq.uchar)
 									{
 										qq.size = vv[i];
 										if (f)
@@ -445,7 +482,6 @@ bool Alignment::Active::update(ActiveUpdateParameters pp)
 									}
 								}
 							}
-							auto& slpp = this->underlyingSlicesParent;						
 							std::size_t h = 0;
 							for (auto& hr : this->underlyingHistorySparse)
 							{
