@@ -247,6 +247,7 @@ bool Alignment::Active::update(ActiveUpdateParameters pp)
 				// copy events to active history
 				if (ok)
 				{		
+					auto& slpp = this->underlyingSlicesParent;
 					HistoryRepaPtrList hrs;
 					hrs.reserve(this->underlyingEventsRepa.size());
 					for (auto& ev : this->underlyingEventsRepa)
@@ -298,8 +299,6 @@ bool Alignment::Active::update(ActiveUpdateParameters pp)
 					}
 					for (std::size_t h = 0; ok && h < hrs.size(); h++)
 					{
-						auto& comp = this->induceVarComputeds;
-						auto& slpp = this->underlyingSlicesParent;
 						auto& hr = *this->underlyingHistoryRepa[h];
 						auto z = hr.size;
 						auto n = hr.dimension;
@@ -357,27 +356,9 @@ bool Alignment::Active::update(ActiveUpdateParameters pp)
 								}
 							}								
 						}
-						// if computed add to underlyingSlicesParent
-						for (std::size_t i = 0; i < n1; i++)
-							if (sh1[i] && comp.count(vv1[i]))
-							{
-								std::size_t b = 0; while (sh1[i]-1 >> b) b++;
-								if (b)
-								{
-									std::size_t v = (1 << this->bits) + (vv1[i] << 12) + (b << 8) + rr1[i];
-									if (!slpp.count(v))
-										for (int k = b-1; k > 0; k--)
-										{
-											std::size_t v1 = (1 << this->bits) + (vv1[i] << 12) + (k << 8) + (rr1[i] >> b-k);
-											slpp[v] = v1;
-											v = v1;
-										}
-								}
-							}
 					}
 					for (std::size_t h = 0; ok && h < has.size(); h++)
 					{
-						auto& slpp = this->underlyingSlicesParent;
 						auto& hr = *this->underlyingHistorySparse[h];
 						auto rr = hr.arr;
 						auto hr1 = has[h];
@@ -427,6 +408,7 @@ bool Alignment::Active::update(ActiveUpdateParameters pp)
 						auto& slpp = this->underlyingSlicesParent;						
 						auto promote = this->underlyingOffsetIs;
 						auto& proms = this->underlyingsVarsOffset;
+						std::size_t block1 = (std::size_t)1 << this->bits;
 						SizeList frameUnderlyingsA(this->frameUnderlyings);
 						if (!frameUnderlyingsA.size())
 							frameUnderlyingsA.push_back(0);	
@@ -454,20 +436,26 @@ bool Alignment::Active::update(ActiveUpdateParameters pp)
 								for (std::size_t i = 0; i < n; i++)
 								{
 									SizeUCharStruct qq;
+									qq.size = vv[i];
 									if (f <= j)
 										qq.uchar = rr[(j-f)*n + i];	
 									else if (f && over && z > f)
 										qq.uchar = rr[((j+z-f)%z)*n + i];	
 									else
 										qq.uchar = 0;
-									if (sh[i] && comp.count(vv[i]))
+									if (sh[i] && comp.count(qq.size)) // computed
 									{
-										std::size_t b = 0; while (sh[i]-1 >> b) b++;
+										std::size_t b = 0; 
+										{
+											std::size_t s = sh[i] - 1;
+											while (s >> b)
+												b++;
+										}
 										for (int k = b; k > 0; k--)
 										{
 											SizeUCharStruct qq1;
 											qq1.uchar = 1;
-											qq1.size = (1 << this->bits) + (vv[i] << 12) + (k << 8) + (qq.uchar >> b-k);
+											qq1.size = block1 + (qq.size << 12) + (k << 8) + (qq.uchar >> b-k);
 											if (f)
 												this->varPromote(mm, qq1.size);
 											jj.push_back(qq1);
@@ -475,7 +463,6 @@ bool Alignment::Active::update(ActiveUpdateParameters pp)
 									}
 									else if (qq.uchar)
 									{
-										qq.size = vv[i];
 										if (f)
 											this->varPromote(mm, qq.size);
 										jj.push_back(qq);
