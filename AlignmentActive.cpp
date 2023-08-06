@@ -247,7 +247,9 @@ bool Alignment::Active::update(ActiveUpdateParameters pp)
 				// copy events to active history
 				if (ok)
 				{		
+					auto& comp = this->induceVarComputeds;
 					auto& slpp = this->underlyingSlicesParent;
+					std::size_t block1 = (std::size_t)1 << this->bits;
 					HistoryRepaPtrList hrs;
 					hrs.reserve(this->underlyingEventsRepa.size());
 					for (auto& ev : this->underlyingEventsRepa)
@@ -356,6 +358,27 @@ bool Alignment::Active::update(ActiveUpdateParameters pp)
 								}
 							}								
 						}
+						// if computed add to underlyingSlicesParent
+						for (std::size_t i = 0; i < n1; i++)
+							if (sh1[i] && comp.count(vv1[i]))
+							{
+								std::size_t b = 0; 
+								{
+									std::size_t s = sh1[i] - 1;
+									while (s >> b)
+										b++;
+								}
+								if (b > 1)
+								{
+									std::size_t v = block1 + (vv1[i] << 12) + (b << 8) + rr1[i];
+									for (int k = b-1; k > 0 && !slpp.count(v); k--)
+									{
+										std::size_t v1 = block1 + (vv1[i] << 12) + (k << 8) + (rr1[i] >> b-k);
+										slpp[v] = v1;
+										v = v1;
+									}
+								}
+							}
 					}
 					for (std::size_t h = 0; ok && h < has.size(); h++)
 					{
@@ -443,22 +466,29 @@ bool Alignment::Active::update(ActiveUpdateParameters pp)
 										qq.uchar = rr[((j+z-f)%z)*n + i];	
 									else
 										qq.uchar = 0;
-									if (sh[i] && comp.count(qq.size)) // computed
+									if (comp.count(qq.size)) // computed
 									{
+										std::size_t s = sh[i];
 										std::size_t b = 0; 
+										if (s)
 										{
-											std::size_t s = sh[i] - 1;
+											s--;
 											while (s >> b)
 												b++;
 										}
-										for (int k = b; k > 0; k--)
+										qq.size = block1 + (qq.size << 12) + (b << 8) + qq.uchar;
+										qq.uchar = 1;
+										auto it = slpp.find(qq.size);
+										if (f)
+											this->varPromote(mm, qq.size);
+										jj.push_back(qq);
+										while (it != slpp.end() && it->second)
 										{
-											SizeUCharStruct qq1;
-											qq1.uchar = 1;
-											qq1.size = block1 + (qq.size << 12) + (k << 8) + (qq.uchar >> b-k);
+											qq.size = it->second;
 											if (f)
-												this->varPromote(mm, qq1.size);
-											jj.push_back(qq1);
+												this->varPromote(mm, qq.size);
+											jj.push_back(qq);
+											it = slpp.find(it->second);
 										}
 									}
 									else if (qq.uchar)
@@ -1023,9 +1053,11 @@ bool Alignment::Active::induce(std::size_t sliceA, ActiveInduceParameters pp, Ac
 					SizeList frameUnderlyingsA(this->frameUnderlyings);
 					if (!frameUnderlyingsA.size())
 						frameUnderlyingsA.push_back(0);					
+					SizeSet qqc;
 					if (ok && llr.size())
 					{
-						auto& qqx = this->induceVarExclusions;					
+						auto& comp = this->induceVarComputeds;
+						auto& excl = this->induceVarExclusions;					
 						for (auto& hr : llr)
 						{
 							auto n = hr->dimension;
@@ -1033,8 +1065,13 @@ bool Alignment::Active::induce(std::size_t sliceA, ActiveInduceParameters pp, Ac
 							for (std::size_t i = 0; i < n; i++)
 							{
 								auto v = vv[i];
-								if (qqx.find(v) == qqx.end())
-									qqr.insert(v);
+								if (!excl.count(v))
+								{
+									if (comp.count(v))
+										qqc.insert(v);
+									else
+										qqr.insert(v);
+								}
 							}
 						}
 					}
@@ -1104,10 +1141,10 @@ bool Alignment::Active::induce(std::size_t sliceA, ActiveInduceParameters pp, Ac
 						for (i = 0; i < nr; i++)
 							qqr.insert(vvr[i]);
 					}
-					if (ok && (lla.size() || (this->decomp && this->historySparse && this->frameHistorys.size())))
+					if (ok && (lla.size() || qqc.size() || (this->decomp && this->historySparse && this->frameHistorys.size())))
 					{
 						auto za = eventsA.size(); 
-						auto na = lla.size()*frameUnderlyingsA.size();
+						auto na = (lla.size()+qqc.size())*frameUnderlyingsA.size();
 						if (this->decomp && this->historySparse)
 							na += this->frameHistorys.size();
 						auto ev = eventsA.data();
@@ -1122,7 +1159,7 @@ bool Alignment::Active::induce(std::size_t sliceA, ActiveInduceParameters pp, Ac
 						auto raa = haa->arr;
 						slppa.reserve(za*na*4);
 						std::size_t i = 0;
-						if (ok)
+						if (ok && lla.size())
 						{
 							auto& slpp = this->underlyingSlicesParent;
 							for (std::size_t g = 0; g < frameUnderlyingsA.size(); g++)
@@ -1229,7 +1266,74 @@ bool Alignment::Active::induce(std::size_t sliceA, ActiveInduceParameters pp, Ac
 								}
 								i++;
 							}									
-						}						
+						}							
+						if (ok && qqc.size())
+						{
+							auto& slpp = this->underlyingSlicesParent;
+							std::size_t block1 = (std::size_t)1 << this->bits;
+							for (std::size_t g = 0; g < frameUnderlyingsA.size(); g++)
+							{
+								auto f = frameUnderlyingsA[g];
+								auto& mm = this->framesVarsOffset[g];
+								for (auto v : qqc)
+								{
+									for (auto& hr : llr)
+									{
+										auto& mvv = hr->mapVarInt();
+										auto it = mvv.find(v);
+										if (it != mvv.end())
+										{
+											auto n = hr->dimension;
+											auto rr = hr->arr;
+											auto k = it->second;
+											auto s = hr->shape[k];
+											std::size_t b = 0; 
+											if (s)
+											{
+												s--;
+												while (s >> b)
+													b++;
+											}
+											for (std::size_t j = 0; j < za; j++)
+											{
+												if (this->frameUnderlyingDynamicIs)
+												{
+													f = 0;
+													auto& frameUnderlyingsB = this->historyFrameUnderlying[ev[j]];
+													if (g < frameUnderlyingsB.size())
+														f = frameUnderlyingsB[g];
+												}
+												unsigned char u = 0;
+												if (g && !f)
+													u = 0;					
+												else if (f <= ev[j])
+													u = rr[(ev[j]-f)*n + k];
+												else if (f && over && z > f)
+													u = rr[((ev[j]+z-f)%z)*n + k];	
+												std::size_t w = block1 + (v << 12) + (b << 8) + u;
+												auto it = slpp.find(w);
+												if (f)
+													this->varPromote(mm, w);
+												raa[j*na + i] = w;
+												while (it != slpp.end() && it->second)
+												{
+													auto w1 = it->first;
+													if (f)
+														this->varPromote(mm, w1);
+													auto w2 = it->second;
+													if (f)
+														this->varPromote(mm, w2);
+													slppa.insert_or_assign(w1, w2);
+													it = slpp.find(it->second);
+												}
+											}
+											break;
+										}
+									}
+									i++;
+								}
+							}
+						}
 					}
 				}
 				if (ok && this->logging)
@@ -1812,6 +1916,11 @@ bool Alignment::Active::induce(std::size_t sliceA, ActiveInduceParameters pp, Ac
 							SizeUCharStructList jj;
 							if (ok)
 							{
+								auto& comp = this->induceVarComputeds;
+								auto& slpp = this->underlyingSlicesParent;
+								auto promote = this->underlyingOffsetIs;
+								auto& proms = this->underlyingsVarsOffset;		
+								std::size_t block1 = (std::size_t)1 << this->bits;
 								SizeList frameUnderlyingsA(this->frameUnderlyings);
 								if (!frameUnderlyingsA.size())
 									frameUnderlyingsA.push_back(0);	
@@ -1824,8 +1933,6 @@ bool Alignment::Active::induce(std::size_t sliceA, ActiveInduceParameters pp, Ac
 								auto z = this->historySize;
 								auto over = this->historyOverflow;
 								auto j = eventB;
-								auto promote = this->underlyingOffsetIs;
-								auto& proms = this->underlyingsVarsOffset;
 								for (std::size_t g = 0; g < frameUnderlyingsA.size(); g++)
 								{
 									auto f = frameUnderlyingsA[g];
@@ -1844,19 +1951,45 @@ bool Alignment::Active::induce(std::size_t sliceA, ActiveInduceParameters pp, Ac
 									{
 										auto n = hr->dimension;
 										auto vv = hr->vectorVar;
+										auto sh = hr->shape;
 										auto rr = hr->arr;	
 										for (std::size_t i = 0; i < n; i++)
 										{
 											SizeUCharStruct qq;
+											qq.size = vv[i];
 											if (f <= j)
 												qq.uchar = rr[(j-f)*n + i];	
 											else if (f && over && z > f)
 												qq.uchar = rr[((j+z-f)%z)*n + i];	
 											else
 												qq.uchar = 0;
-											if (qq.uchar)
+											if (comp.count(qq.size)) // computed
 											{
-												qq.size = vv[i];
+												std::size_t s = sh[i];
+												std::size_t b = 0; 
+												if (s)
+												{
+													s--;
+													while (s >> b)
+														b++;
+												}
+												qq.size = block1 + (qq.size << 12) + (b << 8) + qq.uchar;
+												qq.uchar = 1;
+												auto it = slpp.find(qq.size);
+												if (f)
+													this->varPromote(mm, qq.size);
+												jj.push_back(qq);
+												while (it != slpp.end() && it->second)
+												{
+													qq.size = it->second;
+													if (f)
+														this->varPromote(mm, qq.size);
+													jj.push_back(qq);
+													it = slpp.find(it->second);
+												}
+											}
+											else if (qq.uchar)
+											{
 												if (f)
 													this->varPromote(mm, qq.size);
 												jj.push_back(qq);
