@@ -360,11 +360,13 @@ bool Alignment::Active::update(ActiveUpdateParameters pp)
 						}
 						// if computed add to underlyingSlicesParent
 						for (std::size_t i = 0; i < n1; i++)
-							if (sh1[i] && comp.count(vv1[i]))
+							if (comp.count(vv1[i]))
 							{
+								std::size_t s = sh1[i];
 								std::size_t b = 0; 
+								if (s)
 								{
-									std::size_t s = sh1[i] - 1;
+									s--;
 									while (s >> b)
 										b++;
 								}
@@ -2500,6 +2502,16 @@ bool Alignment::Active::dump(const ActiveIOParameters& pp)
 				}
 			}	
 		}
+		if (ok)
+		{		
+			std::size_t hsize = this->induceVarComputeds.size();
+			out.write(reinterpret_cast<char*>(&hsize), sizeof(std::size_t));
+			if (ok && hsize) 
+			{
+				for (auto v : this->induceVarComputeds)	
+					out.write(reinterpret_cast<char*>((std::size_t*)&v), sizeof(std::size_t));
+			}	
+		}
 		out.close();
 		{
 		// // trace sizes and transitions
@@ -2939,6 +2951,26 @@ bool Alignment::Active::load(const ActiveIOParameters& pp)
 							mm[p] = q;
 						}
 					}	
+				}					
+			}
+			in.clear();
+			in.exceptions(in.failbit | in.badbit | in.eofbit);
+		}	
+		if (ok)
+		{		
+			this->induceVarComputeds.clear();		
+			in.exceptions(in.badbit);
+			std::size_t hsize = 0;
+			in.read(reinterpret_cast<char*>(&hsize), sizeof(std::size_t));
+			if (!in.eof())
+			{
+				in.clear();
+				in.exceptions(in.failbit | in.badbit | in.eofbit);
+				for (std::size_t h = 0; ok && h < hsize; h++)	
+				{
+					std::size_t v;
+					in.read(reinterpret_cast<char*>(&v), sizeof(std::size_t));
+					this->induceVarComputeds.insert(v);
 				}					
 			}
 			in.clear();
