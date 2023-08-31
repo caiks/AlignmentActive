@@ -24,7 +24,7 @@ using namespace Alignment;
 const double repaRounding = 1e-6;
 
 typedef std::chrono::duration<double> sec;
-typedef std::chrono::high_resolution_clock clk;
+typedef std::chrono::system_clock clk;
 
 void log_default(Active& active, const std::string& str)
 {
