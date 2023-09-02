@@ -627,16 +627,15 @@ bool Alignment::Active::update(ActiveUpdateParameters pp)
 						}	
 						// handle next transition
 						if (this->historySliceCachingIs && !this->historySliceCumulativeIs 
-							&& this->historyOverflow)
+							&& this->historyOverflow && this->continousIs)
 						{
-							auto cont = this->continousIs;
 							auto& discont = this->continousHistoryEventsEvent;
 							auto z = this->historySize;
 							auto y = this->historyEvent;
 							auto rs = this->historySparse->arr;
 							auto& nexts = this->historySlicesSlicesSizeNext;
 							auto& prevs = this->historySlicesSliceSetPrev;
-							if (!cont || !discont.count((y+1)%z))
+							if (!discont.count((y+1)%z))
 							{
 								auto sliceC = rs[(y+1)%z];	
 								if (sliceC != sliceB)
@@ -713,7 +712,7 @@ bool Alignment::Active::update(ActiveUpdateParameters pp)
 									sliceC = cv[sliceC];
 								}								
 							}
-							if ((over || y) && (!cont || !discont.count(y)))
+							if ((over || y) && cont && !discont.count(y))
 							{
 								auto sliceC = rs[(y+z-1)%z];	
 								if (sliceC != sliceA)
@@ -2130,21 +2129,6 @@ bool Alignment::Active::induce(std::size_t sliceA, ActiveInduceParameters pp, Ac
 					auto& lengths = this->historySlicesLength;
 					auto& nexts = this->historySlicesSlicesSizeNext;
 					auto& prevs = this->historySlicesSliceSetPrev;					
-					for (auto sliceC : prevs[sliceA])
-					{
-						nexts[sliceC].erase(sliceA);
-						if (!nexts[sliceC].size())
-							nexts.erase(sliceC);
-					}
-					for (auto pp : nexts[sliceA])
-					{
-						auto sliceC = pp.first;
-						prevs[sliceC].erase(sliceA);
-						if (!prevs[sliceC].size())
-							prevs.erase(sliceC);
-					}
-					prevs.erase(sliceA);
-					nexts.erase(sliceA);
 					SizeSet events;
 					for (auto sliceB : sl)
 					{
@@ -2153,31 +2137,50 @@ bool Alignment::Active::induce(std::size_t sliceA, ActiveInduceParameters pp, Ac
 						if (slicesIt != slices.end())
 						{
 							sizes[sliceB] = slicesIt->second.size();
-							events.insert(slicesIt->second.begin(),slicesIt->second.end());
+							if (cont)
+								events.insert(slicesIt->second.begin(),slicesIt->second.end());
 						}
 					}
-					for (auto ev : events)
+					if (cont)
 					{
-						auto sliceB = rs[ev];	
-						if ((over || ev) && ev != y && (!cont || !discont.count(ev)))
+						for (auto sliceC : prevs[sliceA])
 						{
-							auto sliceC = rs[(ev+z-1)%z];	
-							if (sliceC != sliceB)
-							{
-								nexts[sliceC][sliceB]++;
-								prevs[sliceB].insert(sliceC);
-							}
-						}		
-						if (!events.count((ev+1)%z) 
-							&& ev != y-1 && (!cont || !discont.count((ev+1)%z)))
+							nexts[sliceC].erase(sliceA);
+							if (!nexts[sliceC].size())
+								nexts.erase(sliceC);
+						}
+						for (auto pp : nexts[sliceA])
 						{
-							auto sliceC = rs[(ev+1)%z];		
-							if (sliceC != sliceB)
+							auto sliceC = pp.first;
+							prevs[sliceC].erase(sliceA);
+							if (!prevs[sliceC].size())
+								prevs.erase(sliceC);
+						}
+						prevs.erase(sliceA);
+						nexts.erase(sliceA);
+						for (auto ev : events)
+						{
+							auto sliceB = rs[ev];	
+							if ((over || ev) && ev != y && !discont.count(ev))
 							{
-								nexts[sliceB][sliceC]++;
-								prevs[sliceC].insert(sliceB);
+								auto sliceC = rs[(ev+z-1)%z];	
+								if (sliceC != sliceB)
+								{
+									nexts[sliceC][sliceB]++;
+									prevs[sliceB].insert(sliceC);
+								}
 							}
-						}								
+							if (!events.count((ev+1)%z) 
+								&& ev != y-1 && !discont.count((ev+1)%z))
+							{
+								auto sliceC = rs[(ev+1)%z];		
+								if (sliceC != sliceB)
+								{
+									nexts[sliceB][sliceC]++;
+									prevs[sliceC].insert(sliceB);
+								}
+							}								
+						}						
 					}
 				}				
 				// remove from inducingSlices if running async
@@ -3022,6 +3025,7 @@ bool Alignment::Active::load(const ActiveIOParameters& pp)
 					sliceC = cv[sliceC];
 				}								
 			}	
+			if (cont)
 			{
 				auto j = over ? y : z;	
 				auto sliceB = rs[j%z];
@@ -3031,7 +3035,7 @@ bool Alignment::Active::load(const ActiveIOParameters& pp)
 					auto sliceC = rs[j%z];
 					if (sliceC != sliceB)
 					{
-						if (!cont || !discont.count(j%z))
+						if (!discont.count(j%z))
 						{
 							nexts[sliceB][sliceC]++;
 							prevs[sliceC].insert(sliceB);
