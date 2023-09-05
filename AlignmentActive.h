@@ -98,7 +98,7 @@ namespace Alignment
 		
 		std::string name;
 		
-		bool terminate;
+		volatile bool terminate;
 		void (*log)(Active& active, const std::string&);
 		void (*layerer_log)(const std::string&);
 		bool logging;
@@ -149,7 +149,7 @@ namespace Alignment
 		SizeSet induceVarComputeds;
 		SizeSizeMap induceSliceFailsSize;
 		SizeSet inducingSlices;
-		bool updateProhibit;
+		volatile bool updateProhibit;
 		
 		// if dynamic pad out empty frames with 0 so that frame vector length is constant
 		// if underlying current frame 0 is present in any it must be the first of all underlying frames
