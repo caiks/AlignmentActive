@@ -148,7 +148,7 @@ std::size_t Alignment::Active::varComputedMax() const
 	if (!induceVarComputeds.size())
 		return 0;	
 	std::size_t v = *induceVarComputeds.rbegin();
-	return (v << 12) + (8 << 8) + 255 + (1 << this->bits);
+    return (v << 12) + (8ull << 8) + 255 + (1ull << this->bits);
 }
 
 #define UNLOG ; log_str.flush(); this->log(*this, log_str.str());}
@@ -373,9 +373,9 @@ bool Alignment::Active::update(ActiveUpdateParameters pp)
 								if (b > 1)
 								{
 									std::size_t v = block1 + (vv1[i] << 12) + (b << 8) + rr1[i];
-									for (int k = b-1; k > 0 && !slpp.count(v); k--)
+                                    for (int k = (int)(b-1); k > 0 && !slpp.count(v); k--)
 									{
-										std::size_t v1 = block1 + (vv1[i] << 12) + (k << 8) + (rr1[i] >> b-k);
+                                        std::size_t v1 = block1 + (vv1[i] << 12) + (k << 8) + (rr1[i] >> (b-k));
 										slpp[v] = v1;
 										v = v1;
 									}
