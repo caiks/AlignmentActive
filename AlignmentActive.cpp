@@ -16,6 +16,7 @@
 
 #define ECHO(x) std::cout << #x << std::endl; x
 #define EVAL(x) std::cout << #x << ": " << (x) << std::endl
+#define EVALH(x) std::cout << #x << ": " << std::hex << (x) << std::dec << std::endl
 #define EVALL(x) std::cout << #x << ": " << std::endl << (x) << std::endl
 #define TRUTH(x) std::cout << #x << ": " << ((x) ? "true" : "false") << std::endl
 
