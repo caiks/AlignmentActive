@@ -4,6 +4,8 @@ The underlying [AlignmentRepaC repository](https://github.com/caiks/AlignmentRep
 
 The AlignmentActive repository brings together a *history* and a *model* to define a thread-safe structure for realtime *aligned induction*. The AlignmentActive repository depends on the AlignmentRepaC repository.
 
+Version `v01` manages *events* using a queue in `ActiveEventsRepa`. This version has been superseded by managing *events* with a single *event* buffer to allow feedback from higher *levels*, albeit delayed.
+
 ## Download, build and run main executable
 
 The `AlignmentActive` module requires [modern C++](https://en.cppreference.com/w/) version 17 or later to be installed.
