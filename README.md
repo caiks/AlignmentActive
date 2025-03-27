@@ -4,7 +4,7 @@ The underlying [AlignmentRepaC repository](https://github.com/caiks/AlignmentRep
 
 The AlignmentActive repository brings together a *history* and a *model* to define a thread-safe structure for realtime *aligned induction*. The AlignmentActive repository depends on the AlignmentRepaC repository.
 
-## Download, build and run main executable
+## Download and build
 
 The `AlignmentActive` module requires [modern C++](https://en.cppreference.com/w/) version 17 or later to be installed.
 
@@ -21,6 +21,11 @@ git clone https://github.com/caiks/AlignmentRepaC.git
 git clone https://github.com/caiks/AlignmentActive.git
 
 ```
+Note that the AlignmentActive repository has more than one version. To clone another branch, e.g.
+```
+git clone -b v01 --single-branch https://github.com/caiks/AlignmentActive.git
+
+```
 Then build -
 ```
 cd
@@ -30,13 +35,5 @@ cmake -DCMAKE_BUILD_TYPE=RELEASE ../AlignmentActive
 make
 
 ```
-The `main` executable has various modes,
-```
-cd ~/AlignmentActive_ws
-ln -s ../AlignmentActive_build/AlignmentActive_test main
-
-```
-
-## Discussion
 
 
