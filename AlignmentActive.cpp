@@ -132,6 +132,7 @@ std::size_t Alignment::Active::varDemote(const SizeSizeUMap& mm, std::size_t v) 
 std::size_t Alignment::Active::varMax() const
 {
 	std::size_t v = this->var;
+	v = std::max(v,this->varComputedMax());	
 	v = std::max(v,this->varSlice);	
 	if (this->decomp)
 		v = std::max(v,this->decomp->varMax());
@@ -1639,7 +1640,7 @@ bool Alignment::Active::induce(std::size_t sliceA, ActiveInduceParameters pp, Ac
 								algn = mm->back().first;
 								auto m = kk.size();
 								auto z = hr->size;
-								diagonal = 100.0*(exp(algn/z/(m-1))-1.0);
+								diagonal = 100.0*(algn/z/(m-1)/exp(1.0));
 								fail = pp.diagonalMin > 0.0 && diagonal < pp.diagonalMin;
 							}
 						}
