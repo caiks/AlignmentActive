@@ -1640,7 +1640,7 @@ bool Alignment::Active::induce(std::size_t sliceA, ActiveInduceParameters pp, Ac
 								algn = mm->back().first;
 								auto m = kk.size();
 								auto z = hr->size;
-								diagonal = 100.0*(algn/z/(m-1)/exp(1.0));
+								diagonal = 100.0*(algn/z/(m-1)*exp(1.0));
 								fail = pp.diagonalMin > 0.0 && diagonal < pp.diagonalMin;
 							}
 						}
