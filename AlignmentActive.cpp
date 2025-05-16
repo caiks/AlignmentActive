@@ -60,41 +60,23 @@ std::size_t Alignment::ActiveSystem::next(int bitsA)
 	return blockA << this->bits;
 }
 
-ActiveEventsRepa::ActiveEventsRepa(std::size_t referencesA) : references(referencesA)
+std::ostream& operator<<(std::ostream& out, const ActiveEventRepa& ev)
 {
-}
-
-std::ostream& operator<<(std::ostream& out, const ActiveEventsRepa& ev)
-{
-	out << "(" << ev.references << ",[";
-	bool first = true;
-	for (auto& pp : ev.mapIdEvent)
-	{
-		if (!first)
-			out << ",";
-		first = false;
-		out << "(" << pp.first << "," << *pp.second.first << "," << pp.second.second << ")";
-	}
-	out << "])";
+	out << "(" << ev.id << ",";
+	if (!ev.event)
+		out << "null)";
+	else
+		out << *ev.event << ")";
 	return out;
 }
 
-ActiveEventsArray::ActiveEventsArray(std::size_t referencesA) : references(referencesA)
+std::ostream& operator<<(std::ostream& out, const ActiveEventSparse& ev)
 {
-}
-
-std::ostream& operator<<(std::ostream& out, const ActiveEventsArray& ev)
-{
-	out << "(" << ev.references << ",[";
-	bool first = true;
-	for (auto& pp : ev.mapIdEvent)
-	{
-		if (!first)
-			out << ",";
-		first = false;
-		out << "(" << pp.first << "," << *pp.second.first << "," << pp.second.second << ")";
-	}
-	out << "])";
+	out << "(" << ev.id << ",";
+	if (!ev.event)
+		out << "null)";
+	else
+		out << *ev.event << ")";
 	return out;
 }
 
@@ -166,7 +148,6 @@ bool Alignment::Active::update(ActiveUpdateParameters pp)
 	{
 		while (ok && !this->terminate)
 		{
-			SizeSet eventsA;
 			std::size_t eventA = 0;
 			std::size_t historyEventA = 0;
 			std::size_t sliceA = 0;
@@ -178,7 +159,7 @@ bool Alignment::Active::update(ActiveUpdateParameters pp)
 				{
 					ok = ok && this->historySize > 0;
 					for (auto& ev : this->underlyingEventsRepa)
-						ok = ok && ev;
+						ok = ok && ev && ev->event;
 					for (auto& ev : this->underlyingEventsSparse)
 						ok = ok && ev;
 					for (auto& hr : this->underlyingHistoryRepa)
@@ -193,59 +174,12 @@ bool Alignment::Active::update(ActiveUpdateParameters pp)
 						break;
 					}	
 				}
-				// find set of intersecting event ids
-				SizeSet eventsUpdatedA(this->underlyingEventUpdateds);
-				if (ok)
-				{
-					bool eventsFirst = true;
-					for (auto& ev : this->underlyingEventsRepa)
-					{
-						if (!eventsFirst && !eventsA.size())
-							break;				
-						std::lock_guard<std::mutex> guard(ev->mutex);
-						SizeSet eventsB;
-						for (auto& qq : ev->mapIdEvent)	
-						{
-							if (eventsUpdatedA.find(qq.first) == eventsUpdatedA.end() 
-								&& (eventsFirst || eventsA.find(qq.first) != eventsA.end()))
-								eventsB.insert(qq.first);						
-						}	
-						eventsFirst = false;		
-						eventsA = eventsB;
-					}
-					for (auto& ev : this->underlyingEventsSparse)
-					{
-						if (!eventsFirst && !eventsA.size())
-							break;				
-						std::lock_guard<std::mutex> guard(ev->mutex);
-						SizeSet eventsB;
-						for (auto& qq : ev->mapIdEvent)	
-						{
-							if (eventsUpdatedA.find(qq.first) == eventsUpdatedA.end() 
-								&& (eventsFirst || eventsA.find(qq.first) != eventsA.end()))
-								eventsB.insert(qq.first);						
-						}	
-						eventsFirst = false;		
-						eventsA = eventsB;
-					}
-				}		
-				// if there is an event then process it otherwise return
-				if (!(ok && eventsA.size() && (!eventsUpdatedA.size() || *eventsA.rbegin() > *eventsUpdatedA.rbegin()))) 
-					break;
-				// get first new event id
-				eventA = *eventsA.begin();
-				bool continuousA = false;
-				if (ok && eventsUpdatedA.size())
-				{
-					for (auto eventB : eventsA)
-						if (eventB > *eventsUpdatedA.rbegin())
-						{
-							eventA = eventB;
-							break;
-						}
-					// check for discontinuity
-					continuousA = eventA == *eventsUpdatedA.rbegin() + 1;
-				}
+				// get the greatest event id
+				for (auto& ev : this->underlyingEventsRepa)
+					eventA = std::max(eventA,ev->id);
+				for (auto& ev : this->underlyingEventsSparse)
+					eventA = std::max(eventA,ev->id);		
+				bool continuousA = eventA == this->underlyingEventUpdated + 1;
 				// copy events to active history
 				if (ok)
 				{		
@@ -255,35 +189,11 @@ bool Alignment::Active::update(ActiveUpdateParameters pp)
 					HistoryRepaPtrList hrs;
 					hrs.reserve(this->underlyingEventsRepa.size());
 					for (auto& ev : this->underlyingEventsRepa)
-						if (ok)
-						{
-							std::lock_guard<std::mutex> guard(ev->mutex);
-							auto it = ev->mapIdEvent.find(eventA);
-							ok = ok && it != ev->mapIdEvent.end() && it->second.first;
-							if (ok)
-								hrs.push_back(it->second.first);
-							else
-							{
-								LOG "update\terror: lost event repa " << eventA UNLOG
-							}									
-						}
+						hrs.push_back(ev->event);
 					HistorySparseArrayPtrList has;
 					has.reserve(this->underlyingEventsSparse.size());		
 					for (auto& ev : this->underlyingEventsSparse)
-						if (ok)
-						{
-							std::lock_guard<std::mutex> guard(ev->mutex);
-							auto it = ev->mapIdEvent.find(eventA);
-							ok = ok && it != ev->mapIdEvent.end() && it->second.first;
-							if (ok)
-								has.push_back(it->second.first);
-							else
-							{
-								LOG "update\terror: lost event sparse" << eventA UNLOG
-							}									
-						}
-					if (!ok)
-						break;					
+						has.push_back(ev->event);					
 					ok = ok && this->historyEvent < this->historySize;
 					if (!ok) 
 					{
@@ -295,7 +205,7 @@ bool Alignment::Active::update(ActiveUpdateParameters pp)
 						ok = ok && hrs[h]->size == 1;
 					ok = ok && has.size() == this->underlyingHistorySparse.size();
 					for (std::size_t h = 0; ok && h < has.size(); h++)
-						ok = ok && has[h]->size == 1;
+						ok = ok && (!has[h] || has[h]->size == 1);
 					if (!ok) 
 					{
 						LOG "update\terror: inconsistent underlying " UNLOG		
@@ -388,22 +298,27 @@ bool Alignment::Active::update(ActiveUpdateParameters pp)
 					{
 						auto& hr = *this->underlyingHistorySparse[h];
 						auto rr = hr.arr;
-						auto hr1 = has[h];
-						auto n = hr1->capacity;
-						auto rr1 = hr1->arr;
+						auto& hr1 = has[h];
 						auto j = this->historyEvent;
-						std::size_t v = 0;
-						for (int i = (int)n-1; i >= 0; i--)
-							if (rr1[i])
+						rr[j] = 0;
+						if (hr1)
+						{
+							auto n = hr1->capacity;
+							auto rr1 = hr1->arr;
+							for (int i = (int)n-1; i >= 0; i--)
 							{
-								v = rr1[i];
-								break;
+								auto v = rr1[i];
+								if (v)
+								{
+									rr[j] = v;
+									if (slpp.find(v) == slpp.end())
+										for (int k = (int)n-1; k > 0; k--)
+											if (rr1[k] && rr1[k-1])
+												slpp[rr1[k]] = rr1[k-1];
+									break;
+								}								
 							}
-						rr[j] = v;
-						if (v && slpp.find(v) == slpp.end())
-							for (int i = (int)n-1; i > 0; i--)
-								if (rr1[i] && rr1[i-1])
-									slpp[rr1[i]] = rr1[i-1];
+						}
 					}
 				}
 				// check decomp exists
@@ -726,22 +641,21 @@ bool Alignment::Active::update(ActiveUpdateParameters pp)
 						}
 					}
 					// create overlying event
-					if (ok && this->eventsSparse)
+					if (ok && this->eventSparse)
 					{
-						auto& ev = this->eventsSparse;
-						std::lock_guard<std::mutex> guard(ev->mutex);
-						if (ev->references)
+						auto& ev = this->eventSparse;
+						ev->id = eventA;
+						if (ll->size())
 						{
 							std::size_t n = ll->size() ? ll->size() : 1;
 							auto hr = std::make_shared<HistorySparseArray>(1,n);
-							if (ll->size())
-							{
-								auto rr = hr->arr;	
-								for (std::size_t i = 0; i < n; i++)						
-									rr[i] = (*ll)[i];
-							}
-							ev->mapIdEvent.insert_or_assign(eventA,std::pair<HistorySparseArrayPtr,std::size_t>(hr,ev->references));
-						}			
+							auto rr = hr->arr;	
+							for (std::size_t i = 0; i < n; i++)						
+								rr[i] = (*ll)[i];
+							ev->event = hr;
+						}
+						else 
+							ev->event.reset();
 					}
 					if (ok && this->logging)
 					{
@@ -776,77 +690,12 @@ bool Alignment::Active::update(ActiveUpdateParameters pp)
 						this->historyEvent = 0;
 						this->historyOverflow = true;
 					}
-					for (auto eventB : eventsA)
-						if (eventB <= eventA)
-							this->underlyingEventUpdateds.insert(eventB);
+					this->underlyingEventUpdated = eventA;
 				}
-				// unreference underlying up to update event
-				std::size_t eventLeast = eventA;
-				if (ok)
-				{
-					for (auto& ev : this->underlyingEventsRepa)
-					{			
-						std::lock_guard<std::mutex> guard(ev->mutex);
-						if (ev->mapIdEvent.size() && ev->mapIdEvent.begin()->first < eventLeast)
-							eventLeast = ev->mapIdEvent.begin()->first;
-						SizeSet eventsB;
-						for (auto& qq : ev->mapIdEvent)	
-						{
-							if (qq.first <= eventA 
-								&& eventsA.find(qq.first) != eventsA.end()
-								&& eventsUpdatedA.find(qq.first) == eventsUpdatedA.end())
-							{
-								auto& refs = qq.second.second;
-								if (refs)
-									refs--;									
-								if (!refs)
-									eventsB.insert(qq.first);
-							}
-						}	
-						for (auto eventB : eventsB)	
-							ev->mapIdEvent.erase(eventB);
-					}
-					for (auto& ev : this->underlyingEventsSparse)
-					{			
-						std::lock_guard<std::mutex> guard(ev->mutex);
-						if (ev->mapIdEvent.size() && ev->mapIdEvent.begin()->first < eventLeast)
-							eventLeast = ev->mapIdEvent.begin()->first;
-						SizeSet eventsB;
-						for (auto& qq : ev->mapIdEvent)	
-						{
-							if (qq.first <= eventA 
-								&& eventsA.find(qq.first) != eventsA.end()
-								&& eventsUpdatedA.find(qq.first) == eventsUpdatedA.end())
-							{
-								auto& refs = qq.second.second;
-								if (refs)
-									refs--;									
-								if (!refs)
-									eventsB.insert(qq.first);
-							}
-						}	
-						for (auto eventB : eventsB)	
-							ev->mapIdEvent.erase(eventB);
-					}
-				}
-				// remove all but last underlyingEventUpdateds before the first event of any underlying
-				if (ok)
-				{
-					if (this->underlyingEventUpdateds.size())
-					{
-						SizeSet eventsB;
-						for (auto eventB : this->underlyingEventUpdateds)
-							if (eventB < eventLeast)
-								eventsB.insert(eventB);	
-						eventsB.erase(*this->underlyingEventUpdateds.rbegin());
-						for (auto eventB : eventsB)
-							this->underlyingEventUpdateds.erase(eventB);
-					}
-				}	
 			}
-			if (ok && eventsA.size() && updateCallback)
+			if (ok && updateCallback)
 			{
-				ok = ok && updateCallback(*this,eventsA,eventA,historyEventA,sliceA);
+				ok = ok && updateCallback(*this,eventA,historyEventA,sliceA);
 			}
 		}
 	} 
@@ -2257,13 +2106,7 @@ bool Alignment::Active::dump(const ActiveIOParameters& pp)
 		}
 		if (ok)
 		{		
-			std::size_t h = this->underlyingEventUpdateds.size();
-			out.write(reinterpret_cast<char*>(&h), sizeof(std::size_t));
-			if (ok && h) 
-			{
-				std::size_t ev = *this->underlyingEventUpdateds.rbegin();
-				out.write(reinterpret_cast<char*>(&ev), sizeof(std::size_t));
-			}
+			out.write(reinterpret_cast<char*>(&this->underlyingEventUpdated), sizeof(std::size_t));
 		}
 		if (ok)
 		{		
@@ -2596,15 +2439,7 @@ bool Alignment::Active::load(const ActiveIOParameters& pp)
 		}
 		if (ok)
 		{		
-			std::size_t h;
-			in.read(reinterpret_cast<char*>(&h), sizeof(std::size_t));
-			if (ok && h) 
-			{
-				std::size_t ev;
-				in.read(reinterpret_cast<char*>(&ev), sizeof(std::size_t));
-				this->underlyingEventUpdateds.clear();
-				this->underlyingEventUpdateds.insert(ev);
-			}		
+			in.read(reinterpret_cast<char*>(&this->underlyingEventUpdated), sizeof(std::size_t));
 		}
 		if (ok)
 		{		

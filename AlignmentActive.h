@@ -22,28 +22,22 @@ namespace Alignment
 	
 	typedef std::pair<HistoryRepaPtr,std::size_t> HistoryRepaPtrSizePair;
 		
-	struct ActiveEventsRepa
+	struct ActiveEventRepa
 	{
-		ActiveEventsRepa(std::size_t referencesA = 0);
-		std::mutex mutex;
-		std::size_t references;
-		std::map<std::size_t,HistoryRepaPtrSizePair> mapIdEvent;
+		std::size_t id;
+		HistoryRepaPtr event;
 	};
 	
-	typedef std::shared_ptr<ActiveEventsRepa> ActiveEventsRepaPtr;
+	typedef std::shared_ptr<ActiveEventRepa> ActiveEventRepaPtr;
 		
-	typedef std::pair<HistorySparseArrayPtr,std::size_t> HistorySparseArrayPtrSizePair;
-
-	struct ActiveEventsArray
+	struct ActiveEventSparse
 	{
-		ActiveEventsArray(std::size_t referencesA = 0);
-		std::mutex mutex;
-		std::size_t references;
-		std::map<std::size_t,HistorySparseArrayPtrSizePair> mapIdEvent;
+		std::size_t id;
+		HistorySparseArrayPtr event;
 	};
 	
-	typedef std::shared_ptr<ActiveEventsArray> ActiveEventsArrayPtr;
-
+	typedef std::shared_ptr<ActiveEventSparse> ActiveEventSparsePtr;
+		
 	struct ActiveUpdateParameters
 	{
 		std::size_t mapCapacity = 3;
@@ -108,9 +102,9 @@ namespace Alignment
 		
 		std::mutex mutex;
 		
-		std::vector<ActiveEventsRepaPtr> underlyingEventsRepa;
-		std::vector<ActiveEventsArrayPtr> underlyingEventsSparse;
-		SizeSet underlyingEventUpdateds;
+		std::vector<ActiveEventRepaPtr> underlyingEventsRepa;
+		std::vector<ActiveEventSparsePtr> underlyingEventsSparse;
+		std::size_t underlyingEventUpdated;
 		
 		std::size_t historySize;
 		bool historyOverflow;
@@ -135,7 +129,7 @@ namespace Alignment
 		std::unordered_map<std::size_t, SizeSizeMap> historySlicesSlicesSizeNext;
 		std::unordered_map<std::size_t, SizeSet> historySlicesSliceSetPrev;
 			
-		ActiveEventsArrayPtr eventsSparse;
+		ActiveEventSparsePtr eventSparse;
 		
 		std::shared_ptr<ActiveSystem> system;
 		
@@ -172,7 +166,7 @@ namespace Alignment
 		std::size_t varComputedMax() const;
 		
 		bool update(ActiveUpdateParameters pp = ActiveUpdateParameters());
-		bool (*updateCallback)(Active& active, const SizeSet& eventsA, std::size_t eventA, std::size_t historyEventA, std::size_t sliceA);
+		bool (*updateCallback)(Active& active, std::size_t eventA, std::size_t historyEventA, std::size_t sliceA);
 
 		bool induce(ActiveInduceParameters pp = ActiveInduceParameters(),
 					ActiveUpdateParameters ppu = ActiveUpdateParameters());
@@ -185,8 +179,8 @@ namespace Alignment
 	};
 }
 
-std::ostream& operator<<(std::ostream& out, const Alignment::ActiveEventsRepa&);
+std::ostream& operator<<(std::ostream& out, const Alignment::ActiveEventRepa&);
 
-std::ostream& operator<<(std::ostream& out, const Alignment::ActiveEventsArray&);
+std::ostream& operator<<(std::ostream& out, const Alignment::ActiveEventSparse&);
 
 #endif
