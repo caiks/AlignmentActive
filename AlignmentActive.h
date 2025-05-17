@@ -24,16 +24,16 @@ namespace Alignment
 		
 	struct ActiveEventRepa
 	{
-		std::size_t id;
-		HistoryRepaPtr event;
+		std::size_t id = 0;
+		HistoryRepaPtr state;
 	};
 	
 	typedef std::shared_ptr<ActiveEventRepa> ActiveEventRepaPtr;
 		
 	struct ActiveEventSparse
 	{
-		std::size_t id;
-		HistorySparseArrayPtr event;
+		std::size_t id = 0;
+		HistorySparseArrayPtr state;
 	};
 	
 	typedef std::shared_ptr<ActiveEventSparse> ActiveEventSparsePtr;

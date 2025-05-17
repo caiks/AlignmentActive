@@ -63,24 +63,24 @@ std::size_t Alignment::ActiveSystem::next(int bitsA)
 std::ostream& operator<<(std::ostream& out, const ActiveEventRepa& ev)
 {
 	out << "(" << ev.id << ",";
-	if (!ev.event)
+	if (!ev.state)
 		out << "null)";
 	else
-		out << *ev.event << ")";
+		out << *ev.state << ")";
 	return out;
 }
 
 std::ostream& operator<<(std::ostream& out, const ActiveEventSparse& ev)
 {
 	out << "(" << ev.id << ",";
-	if (!ev.event)
+	if (!ev.state)
 		out << "null)";
 	else
-		out << *ev.event << ")";
+		out << *ev.state << ")";
 	return out;
 }
 
-Active::Active(std::string nameA) : name(nameA), terminate(false), log(log_default), layerer_log(layerer_log_default), historyOverflow(false), historyEvent(0), historySize(0), continousIs(false), bits(16), var(0), varSlice(0), induceThreshold(100), updateProhibit(false), logging(false), summary(false), updateCallback(0),  induceCallback(0), client(0), historySliceCachingIs(false), historySliceCumulativeIs(false), frameUnderlyingDynamicIs(false), frameHistoryDynamicIs(false), underlyingOffsetIs(false)
+Active::Active(std::string nameA) : name(nameA), terminate(false), log(log_default), layerer_log(layerer_log_default), underlyingEventUpdated(0), historyOverflow(false), historyEvent(0), historySize(0), continousIs(false), bits(16), var(0), varSlice(0), induceThreshold(100), updateProhibit(false), logging(false), summary(false), updateCallback(0),  induceCallback(0), client(0), historySliceCachingIs(false), historySliceCumulativeIs(false), frameUnderlyingDynamicIs(false), frameHistoryDynamicIs(false), underlyingOffsetIs(false)
 {
 }
 
@@ -159,7 +159,7 @@ bool Alignment::Active::update(ActiveUpdateParameters pp)
 				{
 					ok = ok && this->historySize > 0;
 					for (auto& ev : this->underlyingEventsRepa)
-						ok = ok && ev && ev->event;
+						ok = ok && ev && ev->state;
 					for (auto& ev : this->underlyingEventsSparse)
 						ok = ok && ev;
 					for (auto& hr : this->underlyingHistoryRepa)
@@ -189,11 +189,11 @@ bool Alignment::Active::update(ActiveUpdateParameters pp)
 					HistoryRepaPtrList hrs;
 					hrs.reserve(this->underlyingEventsRepa.size());
 					for (auto& ev : this->underlyingEventsRepa)
-						hrs.push_back(ev->event);
+						hrs.push_back(ev->state);
 					HistorySparseArrayPtrList has;
 					has.reserve(this->underlyingEventsSparse.size());		
 					for (auto& ev : this->underlyingEventsSparse)
-						has.push_back(ev->event);					
+						has.push_back(ev->state);					
 					ok = ok && this->historyEvent < this->historySize;
 					if (!ok) 
 					{
@@ -312,11 +312,11 @@ bool Alignment::Active::update(ActiveUpdateParameters pp)
 								{
 									rr[j] = v;
 									if (slpp.find(v) == slpp.end())
-										for (int k = (int)n-1; k > 0; k--)
-											if (rr1[k] && rr1[k-1])
-												slpp[rr1[k]] = rr1[k-1];
+										for (; i > 0; i--)
+											if (rr1[i] && rr1[i-1])
+												slpp[rr1[i]] = rr1[i-1];
 									break;
-								}								
+								}
 							}
 						}
 					}
@@ -645,17 +645,17 @@ bool Alignment::Active::update(ActiveUpdateParameters pp)
 					{
 						auto& ev = this->eventSparse;
 						ev->id = eventA;
-						if (ll->size())
+						std::size_t n = ll->size();
+						if (n)
 						{
-							std::size_t n = ll->size() ? ll->size() : 1;
 							auto hr = std::make_shared<HistorySparseArray>(1,n);
 							auto rr = hr->arr;	
 							for (std::size_t i = 0; i < n; i++)						
 								rr[i] = (*ll)[i];
-							ev->event = hr;
+							ev->state = hr;
 						}
 						else 
-							ev->event.reset();
+							ev->state.reset();
 					}
 					if (ok && this->logging)
 					{
@@ -2105,7 +2105,9 @@ bool Alignment::Active::dump(const ActiveIOParameters& pp)
 			out.write(reinterpret_cast<char*>((char*)this->name.data()), h);
 		}
 		if (ok)
-		{		
+		{
+			std::size_t h = 1;
+			out.write(reinterpret_cast<char*>(&h), sizeof(std::size_t));
 			out.write(reinterpret_cast<char*>(&this->underlyingEventUpdated), sizeof(std::size_t));
 		}
 		if (ok)
@@ -2439,7 +2441,13 @@ bool Alignment::Active::load(const ActiveIOParameters& pp)
 		}
 		if (ok)
 		{		
-			in.read(reinterpret_cast<char*>(&this->underlyingEventUpdated), sizeof(std::size_t));
+			this->underlyingEventUpdated = 0;
+			std::size_t h = 0;
+			in.read(reinterpret_cast<char*>(&h), sizeof(std::size_t));
+			if (ok && h)
+			{
+				in.read(reinterpret_cast<char*>(&this->underlyingEventUpdated), sizeof(std::size_t));
+			}
 		}
 		if (ok)
 		{		
