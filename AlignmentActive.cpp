@@ -146,557 +146,557 @@ bool Alignment::Active::update(ActiveUpdateParameters pp)
 	bool ok = true;
 	try 
 	{
-		while (ok && !this->terminate)
-		{
-			std::size_t eventA = 0;
-			std::size_t historyEventA = 0;
-			std::size_t sliceA = 0;
-			std::lock_guard<std::mutex> guard(this->mutex);
+		std::size_t eventA = 0;
+		std::size_t historyEventA = 0;
+		std::size_t sliceA = 0;
+		bool continuousA = false;
+		std::lock_guard<std::mutex> guard(this->mutex);
+		if (ok)
+		{				
+			// check consistent underlying
 			if (ok)
-			{				
-				// check consistent underlying
-				if (ok)
+			{
+				ok = ok && this->historySize > 0;
+				for (auto& ev : this->underlyingEventsRepa)
+					ok = ok && ev && ev->state;
+				for (auto& ev : this->underlyingEventsSparse)
+					ok = ok && ev;
+				for (auto& hr : this->underlyingHistoryRepa)
+					ok = ok && hr && hr->size == this->historySize && hr->dimension > 0  && hr->evient;
+				for (auto& hr : this->underlyingHistorySparse)
+					ok = ok && hr && hr->size == this->historySize && hr->capacity == 1;
+				ok = ok && this->underlyingEventsRepa.size() == this->underlyingHistoryRepa.size();
+				ok = ok && this->underlyingEventsSparse.size() == this->underlyingHistorySparse.size();
+				if (!ok)
 				{
-					ok = ok && this->historySize > 0;
-					for (auto& ev : this->underlyingEventsRepa)
-						ok = ok && ev && ev->state;
-					for (auto& ev : this->underlyingEventsSparse)
-						ok = ok && ev;
-					for (auto& hr : this->underlyingHistoryRepa)
-						ok = ok && hr && hr->size == this->historySize && hr->dimension > 0  && hr->evient;
-					for (auto& hr : this->underlyingHistorySparse)
-						ok = ok && hr && hr->size == this->historySize && hr->capacity == 1;
-					ok = ok && this->underlyingEventsRepa.size() == this->underlyingHistoryRepa.size();
-					ok = ok && this->underlyingEventsSparse.size() == this->underlyingHistorySparse.size();
-					if (!ok)
-					{
-						LOG "update\terror: inconsistent underlying" UNLOG
-						break;
-					}	
-				}
-				// get the greatest event id
+					LOG "update\terror: inconsistent underlying" UNLOG
+				}	
+			}
+			// get the greatest event id
+			if (ok)
+			{
 				for (auto& ev : this->underlyingEventsRepa)
 					eventA = std::max(eventA,ev->id);
 				for (auto& ev : this->underlyingEventsSparse)
 					eventA = std::max(eventA,ev->id);		
-				bool continuousA = eventA == this->underlyingEventUpdated + 1;
-				// copy events to active history
+				continuousA = eventA == this->underlyingEventUpdated + 1;				
+			}
+			// copy events to active history
+			if (ok)
+			{		
+				auto& comp = this->induceVarComputeds;
+				auto& slpp = this->underlyingSlicesParent;
+				std::size_t block1 = (std::size_t)1 << this->bits;
+				HistoryRepaPtrList hrs;
+				hrs.reserve(this->underlyingEventsRepa.size());
+				for (auto& ev : this->underlyingEventsRepa)
+					hrs.push_back(ev->state);
+				HistorySparseArrayPtrList has;
+				has.reserve(this->underlyingEventsSparse.size());		
+				for (auto& ev : this->underlyingEventsSparse)
+					has.push_back(ev->state);
+				// check consistent historyEvent
 				if (ok)
-				{		
-					auto& comp = this->induceVarComputeds;
-					auto& slpp = this->underlyingSlicesParent;
-					std::size_t block1 = (std::size_t)1 << this->bits;
-					HistoryRepaPtrList hrs;
-					hrs.reserve(this->underlyingEventsRepa.size());
-					for (auto& ev : this->underlyingEventsRepa)
-						hrs.push_back(ev->state);
-					HistorySparseArrayPtrList has;
-					has.reserve(this->underlyingEventsSparse.size());		
-					for (auto& ev : this->underlyingEventsSparse)
-						has.push_back(ev->state);					
+				{
 					ok = ok && this->historyEvent < this->historySize;
 					if (!ok) 
 					{
 						LOG "update\terror: inconsistent historyEvent " << this->historyEvent << " compared to historySize " << this->historySize UNLOG		
-						break;
 					}
+				}
+				// check consistent underlying
+				if (ok)
+				{
 					ok = ok && hrs.size() == this->underlyingHistoryRepa.size();
 					for (std::size_t h = 0; ok && h < hrs.size(); h++)
 						ok = ok && hrs[h]->size == 1;
 					ok = ok && has.size() == this->underlyingHistorySparse.size();
 					for (std::size_t h = 0; ok && h < has.size(); h++)
-						ok = ok && (!has[h] || has[h]->size == 1);
+						ok = ok && (!has[h] || has[h]->size == 1);					
 					if (!ok) 
 					{
 						LOG "update\terror: inconsistent underlying " UNLOG		
-						break;
 					}
-					for (std::size_t h = 0; ok && h < hrs.size(); h++)
+				}
+				for (std::size_t h = 0; ok && h < hrs.size(); h++)
+				{
+					auto& hr = *this->underlyingHistoryRepa[h];
+					auto z = hr.size;
+					auto n = hr.dimension;
+					auto vv = hr.vectorVar;
+					auto rr = hr.arr;
+					auto& hr1 = *hrs[h];
+					auto n1 = hr1.dimension;
+					auto vv1 = hr1.vectorVar;
+					auto sh1 = hr1.shape;
+					auto rr1 = hr1.arr;
+					auto j = this->historyEvent;
+					bool equiv = n == n1;
+					for (std::size_t i = 0; equiv && i < n; i++)
+						equiv = equiv && vv[i] == vv1[i];
+					if (equiv)
 					{
-						auto& hr = *this->underlyingHistoryRepa[h];
-						auto z = hr.size;
-						auto n = hr.dimension;
-						auto vv = hr.vectorVar;
-						auto rr = hr.arr;
-						auto& hr1 = *hrs[h];
-						auto n1 = hr1.dimension;
-						auto vv1 = hr1.vectorVar;
-						auto sh1 = hr1.shape;
-						auto rr1 = hr1.arr;
-						auto j = this->historyEvent;
-						bool equiv = n == n1;
-						for (std::size_t i = 0; equiv && i < n; i++)
-							equiv = equiv && vv[i] == vv1[i];
-						if (equiv)
+						if (hr.evient)
 						{
-							if (hr.evient)
-							{
-								std::size_t jn = j*n;
-								for (std::size_t i = 0; i < n; i++)
-									rr[jn + i] = rr1[i];
-							}
-							else
-							{
-								for (std::size_t i = 0; i < n; i++)
-									rr[i*z + j] = rr1[i];
-							}		
+							std::size_t jn = j*n;
+							for (std::size_t i = 0; i < n; i++)
+								rr[jn + i] = rr1[i];
 						}
 						else
 						{
-							auto& mvv = hr.mapVarInt();
-							if (hr.evient)
-							{
-								std::size_t jn = j*n;
-								for (std::size_t i = 0; i < n; i++)
-									rr[jn + i] = 0;
-								for (std::size_t i = 0; i < n1; i++)
-								{
-									auto v = vv1[i];
-									auto it = mvv.find(v);
-									if (it != mvv.end())
-										rr[jn + it->second] = rr1[i];
-								}
-							}
-							else
-							{
-								for (std::size_t i = 0; i < n; i++)
-									rr[i*z + j] = 0;
-								for (std::size_t i = 0; i < n1; i++)
-								{
-									auto v = vv1[i];
-									auto it = mvv.find(v);
-									if (it != mvv.end())
-										rr[it->second * z + j] = rr1[i];
-								}
-							}								
-						}
-						// if computed add to underlyingSlicesParent
-						for (std::size_t i = 0; i < n1; i++)
-							if (comp.count(vv1[i]))
-							{
-								std::size_t s = sh1[i];
-								std::size_t b = 0; 
-								if (s)
-								{
-									s--;
-									while (s >> b)
-										b++;
-								}
-								if (b > 1)
-								{
-									std::size_t v = block1 + (vv1[i] << 12) + (b << 8) + rr1[i];
-                                    for (int k = (int)(b-1); k > 0 && !slpp.count(v); k--)
-									{
-                                        std::size_t v1 = block1 + (vv1[i] << 12) + (k << 8) + (rr1[i] >> (b-k));
-										slpp[v] = v1;
-										v = v1;
-									}
-								}
-							}
+							for (std::size_t i = 0; i < n; i++)
+								rr[i*z + j] = rr1[i];
+						}		
 					}
-					for (std::size_t h = 0; ok && h < has.size(); h++)
+					else
 					{
-						auto& hr = *this->underlyingHistorySparse[h];
-						auto rr = hr.arr;
-						auto& hr1 = has[h];
-						auto j = this->historyEvent;
-						rr[j] = 0;
-						if (hr1)
+						auto& mvv = hr.mapVarInt();
+						if (hr.evient)
 						{
-							auto n = hr1->capacity;
-							auto rr1 = hr1->arr;
-							for (int i = (int)n-1; i >= 0; i--)
+							std::size_t jn = j*n;
+							for (std::size_t i = 0; i < n; i++)
+								rr[jn + i] = 0;
+							for (std::size_t i = 0; i < n1; i++)
 							{
-								auto v = rr1[i];
-								if (v)
+								auto v = vv1[i];
+								auto it = mvv.find(v);
+								if (it != mvv.end())
+									rr[jn + it->second] = rr1[i];
+							}
+						}
+						else
+						{
+							for (std::size_t i = 0; i < n; i++)
+								rr[i*z + j] = 0;
+							for (std::size_t i = 0; i < n1; i++)
+							{
+								auto v = vv1[i];
+								auto it = mvv.find(v);
+								if (it != mvv.end())
+									rr[it->second * z + j] = rr1[i];
+							}
+						}								
+					}
+					// if computed add to underlyingSlicesParent
+					for (std::size_t i = 0; i < n1; i++)
+						if (comp.count(vv1[i]))
+						{
+							std::size_t s = sh1[i];
+							std::size_t b = 0; 
+							if (s)
+							{
+								s--;
+								while (s >> b)
+									b++;
+							}
+							if (b > 1)
+							{
+								std::size_t v = block1 + (vv1[i] << 12) + (b << 8) + rr1[i];
+								for (int k = (int)(b-1); k > 0 && !slpp.count(v); k--)
 								{
-									rr[j] = v;
-									if (slpp.find(v) == slpp.end())
-										for (; i > 0; i--)
-											if (rr1[i] && rr1[i-1])
-												slpp[rr1[i]] = rr1[i-1];
-									break;
+									std::size_t v1 = block1 + (vv1[i] << 12) + (k << 8) + (rr1[i] >> (b-k));
+									slpp[v] = v1;
+									v = v1;
 								}
+							}
+						}
+				}
+				for (std::size_t h = 0; ok && h < has.size(); h++)
+				{
+					auto& hr = *this->underlyingHistorySparse[h];
+					auto rr = hr.arr;
+					auto& hr1 = has[h];
+					auto j = this->historyEvent;
+					rr[j] = 0;
+					if (hr1)
+					{
+						auto n = hr1->capacity;
+						auto rr1 = hr1->arr;
+						for (int i = (int)n-1; i >= 0; i--)
+						{
+							auto v = rr1[i];
+							if (v)
+							{
+								rr[j] = v;
+								if (slpp.find(v) == slpp.end())
+									for (; i > 0; i--)
+										if (rr1[i] && rr1[i-1])
+											slpp[rr1[i]] = rr1[i-1];
+								break;
 							}
 						}
 					}
 				}
-				// check decomp exists
-				if (ok)
+			}
+			// check decomp exists
+			if (ok)
+			{
+				ok = ok && this->decomp;
+				if (!ok)
 				{
-					ok = ok && this->decomp;
+					LOG "update\terror: no decomp set" UNLOG
+				}				
+			}
+			// apply the model
+			if (ok)
+			{
+				auto mark = (ok && this->logging) ? clk::now() : std::chrono::time_point<clk>();
+				// check consistent history
+				if (ok && this->historySparse)
+				{
+					ok = ok && this->historySparse->size == this->historySize && this->historySparse->capacity == 1;
 					if (!ok)
 					{
-						LOG "update\terror: no decomp set" UNLOG
-					}				
+						LOG "update\terror: inconsistent history" UNLOG
+					}
 				}
-				// apply the model
+				SizeUCharStructList jj;
 				if (ok)
 				{
-					auto mark = (ok && this->logging) ? clk::now() : std::chrono::time_point<clk>();
-					if (ok && this->historySparse)
+					auto& comp = this->induceVarComputeds;
+					auto& slpp = this->underlyingSlicesParent;						
+					auto promote = this->underlyingOffsetIs;
+					auto& proms = this->underlyingsVarsOffset;
+					std::size_t block1 = (std::size_t)1 << this->bits;
+					SizeList frameUnderlyingsA(this->frameUnderlyings);
+					if (!frameUnderlyingsA.size())
+						frameUnderlyingsA.push_back(0);	
+					std::size_t m = 0;
+					for (auto& hr : this->underlyingHistoryRepa)
+						m += 8*hr->dimension*frameUnderlyingsA.size();
+					m += 50*this->underlyingHistorySparse.size()*frameUnderlyingsA.size();
+					m += 50*this->frameHistorys.size();
+					jj.reserve(m);
+					auto z = this->historySize;
+					auto over = this->historyOverflow;
+					auto j = this->historyEvent;
+					for (std::size_t g = 0; g < frameUnderlyingsA.size(); g++)
 					{
-						ok = ok && this->historySparse->size == this->historySize && this->historySparse->capacity == 1;
-						if (!ok)
-						{
-							LOG "update\terror: inconsistent history" UNLOG
-							break;
-						}
-					}
-					SizeUCharStructList jj;
-					if (ok)
-					{
-						auto& comp = this->induceVarComputeds;
-						auto& slpp = this->underlyingSlicesParent;						
-						auto promote = this->underlyingOffsetIs;
-						auto& proms = this->underlyingsVarsOffset;
-						std::size_t block1 = (std::size_t)1 << this->bits;
-						SizeList frameUnderlyingsA(this->frameUnderlyings);
-						if (!frameUnderlyingsA.size())
-							frameUnderlyingsA.push_back(0);	
-						std::size_t m = 0;
+						auto f = frameUnderlyingsA[g];
+						if (g && !f)
+							continue;
+						auto& mm = this->framesVarsOffset[g];
 						for (auto& hr : this->underlyingHistoryRepa)
-							m += 8*hr->dimension*frameUnderlyingsA.size();
-						m += 50*this->underlyingHistorySparse.size()*frameUnderlyingsA.size();
-						m += 50*this->frameHistorys.size();
-						jj.reserve(m);
-						auto z = this->historySize;
-						auto over = this->historyOverflow;
-						auto j = this->historyEvent;
-						for (std::size_t g = 0; g < frameUnderlyingsA.size(); g++)
 						{
-							auto f = frameUnderlyingsA[g];
-							if (g && !f)
-								continue;
-							auto& mm = this->framesVarsOffset[g];
-							for (auto& hr : this->underlyingHistoryRepa)
+							auto n = hr->dimension;
+							auto vv = hr->vectorVar;
+							auto sh = hr->shape;
+							auto rr = hr->arr;	
+							for (std::size_t i = 0; i < n; i++)
 							{
-								auto n = hr->dimension;
-								auto vv = hr->vectorVar;
-								auto sh = hr->shape;
-								auto rr = hr->arr;	
-								for (std::size_t i = 0; i < n; i++)
+								SizeUCharStruct qq;
+								qq.size = vv[i];
+								if (f <= j)
+									qq.uchar = rr[(j-f)*n + i];	
+								else if (f && over && z > f)
+									qq.uchar = rr[((j+z-f)%z)*n + i];	
+								else
+									qq.uchar = 0;
+								if (comp.count(qq.size)) // computed
+								{
+									std::size_t s = sh[i];
+									std::size_t b = 0; 
+									if (s)
+									{
+										s--;
+										while (s >> b)
+											b++;
+									}
+									qq.size = block1 + (qq.size << 12) + (b << 8) + qq.uchar;
+									qq.uchar = 1;
+									auto it = slpp.find(qq.size);
+									if (f)
+										this->varPromote(mm, qq.size);
+									jj.push_back(qq);
+									while (it != slpp.end() && it->second)
+									{
+										qq.size = it->second;
+										if (f)
+											this->varPromote(mm, qq.size);
+										jj.push_back(qq);
+										it = slpp.find(it->second);
+									}
+								}
+								else if (qq.uchar)
+								{
+									if (f)
+										this->varPromote(mm, qq.size);
+									jj.push_back(qq);
+								}
+							}
+						}
+						std::size_t h = 0;
+						for (auto& hr : this->underlyingHistorySparse)
+						{
+							std::size_t v = 0;
+							if (f <= j)
+								v = hr->arr[j-f];
+							else if (f && over && z > f)
+								v = hr->arr[(j+z-f)%z]; 
+							if (v)
+							{
 								{
 									SizeUCharStruct qq;
-									qq.size = vv[i];
-									if (f <= j)
-										qq.uchar = rr[(j-f)*n + i];	
-									else if (f && over && z > f)
-										qq.uchar = rr[((j+z-f)%z)*n + i];	
-									else
-										qq.uchar = 0;
-									if (comp.count(qq.size)) // computed
-									{
-										std::size_t s = sh[i];
-										std::size_t b = 0; 
-										if (s)
-										{
-											s--;
-											while (s >> b)
-												b++;
-										}
-										qq.size = block1 + (qq.size << 12) + (b << 8) + qq.uchar;
-										qq.uchar = 1;
-										auto it = slpp.find(qq.size);
-										if (f)
-											this->varPromote(mm, qq.size);
-										jj.push_back(qq);
-										while (it != slpp.end() && it->second)
-										{
-											qq.size = it->second;
-											if (f)
-												this->varPromote(mm, qq.size);
-											jj.push_back(qq);
-											it = slpp.find(it->second);
-										}
-									}
-									else if (qq.uchar)
-									{
-										if (f)
-											this->varPromote(mm, qq.size);
-										jj.push_back(qq);
-									}
-								}
-							}
-							std::size_t h = 0;
-							for (auto& hr : this->underlyingHistorySparse)
-							{
-								std::size_t v = 0;
-								if (f <= j)
-									v = hr->arr[j-f];
-								else if (f && over && z > f)
-									v = hr->arr[(j+z-f)%z]; 
-								if (v)
-								{
-									{
-										SizeUCharStruct qq;
-										qq.uchar = 1;			
-										qq.size = v;
-										if (promote)
-											this->varPromote(proms[h], qq.size);
-										if (f)
-											this->varPromote(mm, qq.size);
-										jj.push_back(qq);
-									}								
-									auto it = slpp.find(v);
-									while (it != slpp.end())
-									{
-										SizeUCharStruct qq;
-										qq.uchar = 1;
-										qq.size = it->second;
-										if (!qq.size)
-											break;
-										if (promote)
-											this->varPromote(proms[h], qq.size);
-										if (f)
-											this->varPromote(mm, qq.size);
-										jj.push_back(qq);
-										it = slpp.find(it->second);
-									}										
-								}
-								h++;
-							}										
-						}
-						if (ok && this->decomp && this->historySparse && this->frameHistorys.size())
-						{
-							auto& hr = this->historySparse;
-							auto& slpp = this->decomp->mapVarParent();
-							for (std::size_t g = 0; g < this->frameHistorys.size(); g++)
-							{
-								auto f = this->frameHistorys[g];
-								if (!f)
-									continue;
-								auto& mm = this->framesVarsOffset[g];
-								std::size_t v = 0;
-								if (f <= j)
-									v = hr->arr[j-f];
-								else if (f && over && z > f)
-									v = hr->arr[(j+z-f)%z]; 
-								if (v)
-								{
-									{
-										SizeUCharStruct qq;
-										qq.uchar = 1;			
-										qq.size = v;
-										if (f)
-											this->varPromote(mm, qq.size);			
-										jj.push_back(qq);
-									}								
-									auto it = slpp.find(v);
-									while (it != slpp.end())
-									{
-										SizeUCharStruct qq;
-										qq.uchar = 1;
-										qq.size = it->second;
-										if (!qq.size)
-											break;										
-										if (f)
-											this->varPromote(mm, qq.size);			
-										jj.push_back(qq);
-										it = slpp.find(it->second);
-									}										
-								}
-							}
-						}
-					}
-					std::unique_ptr<SizeList> ll;
-					if (ok)
-					{
-						ll = drmul(jj,*this->decomp,(unsigned char)(pp.mapCapacity));	
-						ok = ok && ll;
-						if (!ok)
-						{
-							LOG "update\terror: drmul failed to return a list" UNLOG
-						}						
-					}
-					// sync active slices
-					if (ok && this->historySparse)
-					{
-						if (ll->size())
-							sliceA = ll->back();
-						ok = ok && this->historySparse->size == this->historySize && this->historySparse->capacity == 1;
-						if (!ok)
-						{
-							LOG "update\terror: inconsistent history" UNLOG
-							break;
-						}	
-						std::size_t sliceB = this->historyOverflow ? this->historySparse->arr[this->historyEvent] : 0;
-						// update history
-						if (!this->historyOverflow || sliceA != sliceB)
-						{
-							this->historySparse->arr[this->historyEvent] = sliceA;
-							auto& setA = this->historySlicesSetEvent[sliceA];
-							setA.insert(this->historyEvent);
-							if (this->induceThreshold && setA.size() == this->induceThreshold)
-								this->induceSlices.insert(sliceA);
-							if (this->historyOverflow)
-							{
-								auto& setB = this->historySlicesSetEvent[sliceB];
-								setB.erase(this->historyEvent);
-								if (this->induceThreshold && setB.size() == this->induceThreshold-1)
-								{
-									this->induceSlices.erase(sliceB);
-									this->induceSliceFailsSize.erase(sliceB);
-								}
-								if (!setB.size())
-									this->historySlicesSetEvent.erase(sliceB);
-							}
-						}	
-						// handle next transition
-						if (this->historySliceCachingIs && !this->historySliceCumulativeIs 
-							&& this->historyOverflow && this->continousIs)
-						{
-							auto& discont = this->continousHistoryEventsEvent;
-							auto z = this->historySize;
-							auto y = this->historyEvent;
-							auto rs = this->historySparse->arr;
-							auto& nexts = this->historySlicesSlicesSizeNext;
-							auto& prevs = this->historySlicesSliceSetPrev;
-							if (!discont.count((y+1)%z))
-							{
-								auto sliceC = rs[(y+1)%z];	
-								if (sliceC != sliceB)
-								{
-									auto& c = nexts[sliceB][sliceC];
-									if (c > 1)
-										c--;
-									else
-									{		
-										nexts[sliceB].erase(sliceC);
-										if (!nexts[sliceB].size())
-											nexts.erase(sliceB);
-										prevs[sliceC].erase(sliceB);
-										if (!prevs[sliceC].size())
-											prevs.erase(sliceC);
-									}
-								}
-							}
-						}
-						// handle discontinuities
-						if (this->continousIs)
-						{
-							auto over = this->historyOverflow;
-							auto& discont = this->continousHistoryEventsEvent;
-							auto z = this->historySize;
-							auto y = this->historyEvent;
-							auto it = discont.find(y);
-							if (it != discont.end() && over && y+1 < z && !discont.count(y+1))
-								discont.insert_or_assign(y+1,it->second+1);
-							else if (it != discont.end() && y+1 == z && !discont.count(0))
-								discont.insert_or_assign(0,it->second+1);
-							if (continuousA)
-								discont.erase(y);
-							else
-								discont.insert_or_assign(y,eventA);
-						}	
-						// handle cached sizes and prev transition
-						if (this->historySliceCachingIs)
-						{
-							auto cumulative = this->historySliceCumulativeIs;
-							auto over = this->historyOverflow;
-							auto cont = this->continousIs;
-							auto& discont = this->continousHistoryEventsEvent;
-							auto z = this->historySize;
-							auto y = this->historyEvent;
-							auto rs = this->historySparse->arr;
-							auto& sizes = this->historySlicesSize;
-							auto& nexts = this->historySlicesSlicesSizeNext;
-							auto& prevs = this->historySlicesSliceSetPrev;
-							auto& cv = this->decomp->mapVarParent();
-							if (cumulative || !over || sliceA != sliceB)
-							{
-								auto sliceC = sliceA;
-								while (true)
-								{
-									sizes[sliceC]++;
-									if (!sliceC)
-										break;
-									sliceC = cv[sliceC];
+									qq.uchar = 1;			
+									qq.size = v;
+									if (promote)
+										this->varPromote(proms[h], qq.size);
+									if (f)
+										this->varPromote(mm, qq.size);
+									jj.push_back(qq);
 								}								
-							}
-							if (!cumulative && over && sliceA != sliceB)
-							{
-								auto sliceC = sliceB;
-								while (true)
+								auto it = slpp.find(v);
+								while (it != slpp.end())
 								{
-									auto& c = sizes[sliceC];
-									if (c > 1)
-										c--;
-									else
-										sizes.erase(sliceC);
-									if (!sliceC)
+									SizeUCharStruct qq;
+									qq.uchar = 1;
+									qq.size = it->second;
+									if (!qq.size)
 										break;
-									sliceC = cv[sliceC];
-								}								
+									if (promote)
+										this->varPromote(proms[h], qq.size);
+									if (f)
+										this->varPromote(mm, qq.size);
+									jj.push_back(qq);
+									it = slpp.find(it->second);
+								}										
 							}
-							if ((over || y) && cont && !discont.count(y))
-							{
-								auto sliceC = rs[(y+z-1)%z];	
-								if (sliceC != sliceA)
-								{
-									nexts[sliceC][sliceA]++;
-									prevs[sliceA].insert(sliceC);
-								}
-							}
-						}
+							h++;
+						}										
 					}
-					// create overlying event
-					if (ok && this->eventSparse)
+					if (ok && this->decomp && this->historySparse && this->frameHistorys.size())
 					{
-						auto& ev = this->eventSparse;
-						ev->id = eventA;
-						std::size_t n = ll->size();
-						if (n)
+						auto& hr = this->historySparse;
+						auto& slpp = this->decomp->mapVarParent();
+						for (std::size_t g = 0; g < this->frameHistorys.size(); g++)
 						{
-							auto hr = std::make_shared<HistorySparseArray>(1,n);
-							auto rr = hr->arr;	
-							for (std::size_t i = 0; i < n; i++)						
-								rr[i] = (*ll)[i];
-							ev->state = hr;
+							auto f = this->frameHistorys[g];
+							if (!f)
+								continue;
+							auto& mm = this->framesVarsOffset[g];
+							std::size_t v = 0;
+							if (f <= j)
+								v = hr->arr[j-f];
+							else if (f && over && z > f)
+								v = hr->arr[(j+z-f)%z]; 
+							if (v)
+							{
+								{
+									SizeUCharStruct qq;
+									qq.uchar = 1;			
+									qq.size = v;
+									if (f)
+										this->varPromote(mm, qq.size);			
+									jj.push_back(qq);
+								}								
+								auto it = slpp.find(v);
+								while (it != slpp.end())
+								{
+									SizeUCharStruct qq;
+									qq.uchar = 1;
+									qq.size = it->second;
+									if (!qq.size)
+										break;										
+									if (f)
+										this->varPromote(mm, qq.size);			
+									jj.push_back(qq);
+									it = slpp.find(it->second);
+								}										
+							}
 						}
-						else 
-							ev->state.reset();
-					}
-					if (ok && this->logging)
-					{
-						LOG "update apply\tevent id: " << eventA << "\thistory id: " << this->historyEvent << "\tslice: " << std::hex << sliceA << std::dec << "\tslice size: " << this->historySlicesSetEvent[sliceA].size() << "\ttime: " << ((sec)(clk::now() - mark)).count() << "s" UNLOG
 					}
 				}
-				// increment historyEvent
+				std::unique_ptr<SizeList> ll;
 				if (ok)
 				{
-					if (this->frameUnderlyingDynamicIs)
+					ll = drmul(jj,*this->decomp,(unsigned char)(pp.mapCapacity));	
+					ok = ok && ll;
+					if (!ok)
 					{
-						this->historyFrameUnderlying.reserve(this->historySize);
-						if (this->historyEvent < this->historyFrameUnderlying.size())
-							this->historyFrameUnderlying[this->historyEvent] = this->frameUnderlyings;
-						else 
-							this->historyFrameUnderlying.push_back(this->frameUnderlyings);
-						this->historyFrameUnderlying[this->historyEvent].shrink_to_fit();
-					}
-					if (this->frameHistoryDynamicIs)
+						LOG "update\terror: drmul failed to return a list" UNLOG
+					}						
+				}
+				// sync active slices
+				if (ok && this->historySparse)
+				{
+					if (ll->size())
+						sliceA = ll->back();
+					std::size_t sliceB = this->historyOverflow ? this->historySparse->arr[this->historyEvent] : 0;
+					// update history
+					if (!this->historyOverflow || sliceA != sliceB)
 					{
-						this->historyFrameHistory.reserve(this->historySize);
-						if (this->historyEvent < this->historyFrameHistory.size())
-							this->historyFrameHistory[this->historyEvent] = this->frameHistorys;
-						else 
-							this->historyFrameHistory.push_back(this->frameHistorys);
-						this->historyFrameHistory[this->historyEvent].shrink_to_fit();
-					}
-					historyEventA = this->historyEvent;
-					this->historyEvent++;
-					if (this->historyEvent >= this->historySize)
+						this->historySparse->arr[this->historyEvent] = sliceA;
+						auto& setA = this->historySlicesSetEvent[sliceA];
+						setA.insert(this->historyEvent);
+						if (this->induceThreshold && setA.size() == this->induceThreshold)
+							this->induceSlices.insert(sliceA);
+						if (this->historyOverflow)
+						{
+							auto& setB = this->historySlicesSetEvent[sliceB];
+							setB.erase(this->historyEvent);
+							if (this->induceThreshold && setB.size() == this->induceThreshold-1)
+							{
+								this->induceSlices.erase(sliceB);
+								this->induceSliceFailsSize.erase(sliceB);
+							}
+							if (!setB.size())
+								this->historySlicesSetEvent.erase(sliceB);
+						}
+					}	
+					// handle next transition
+					if (this->historySliceCachingIs && !this->historySliceCumulativeIs 
+						&& this->historyOverflow && this->continousIs)
 					{
-						this->historyEvent = 0;
-						this->historyOverflow = true;
+						auto& discont = this->continousHistoryEventsEvent;
+						auto z = this->historySize;
+						auto y = this->historyEvent;
+						auto rs = this->historySparse->arr;
+						auto& nexts = this->historySlicesSlicesSizeNext;
+						auto& prevs = this->historySlicesSliceSetPrev;
+						if (!discont.count((y+1)%z))
+						{
+							auto sliceC = rs[(y+1)%z];	
+							if (sliceC != sliceB)
+							{
+								auto& c = nexts[sliceB][sliceC];
+								if (c > 1)
+									c--;
+								else
+								{		
+									nexts[sliceB].erase(sliceC);
+									if (!nexts[sliceB].size())
+										nexts.erase(sliceB);
+									prevs[sliceC].erase(sliceB);
+									if (!prevs[sliceC].size())
+										prevs.erase(sliceC);
+								}
+							}
+						}
 					}
-					this->underlyingEventUpdated = eventA;
+					// handle discontinuities
+					if (this->continousIs)
+					{
+						auto over = this->historyOverflow;
+						auto& discont = this->continousHistoryEventsEvent;
+						auto z = this->historySize;
+						auto y = this->historyEvent;
+						auto it = discont.find(y);
+						if (it != discont.end() && over && y+1 < z && !discont.count(y+1))
+							discont.insert_or_assign(y+1,it->second+1);
+						else if (it != discont.end() && y+1 == z && !discont.count(0))
+							discont.insert_or_assign(0,it->second+1);
+						if (continuousA)
+							discont.erase(y);
+						else
+							discont.insert_or_assign(y,eventA);
+					}	
+					// handle cached sizes and prev transition
+					if (this->historySliceCachingIs)
+					{
+						auto cumulative = this->historySliceCumulativeIs;
+						auto over = this->historyOverflow;
+						auto cont = this->continousIs;
+						auto& discont = this->continousHistoryEventsEvent;
+						auto z = this->historySize;
+						auto y = this->historyEvent;
+						auto rs = this->historySparse->arr;
+						auto& sizes = this->historySlicesSize;
+						auto& nexts = this->historySlicesSlicesSizeNext;
+						auto& prevs = this->historySlicesSliceSetPrev;
+						auto& cv = this->decomp->mapVarParent();
+						if (cumulative || !over || sliceA != sliceB)
+						{
+							auto sliceC = sliceA;
+							while (true)
+							{
+								sizes[sliceC]++;
+								if (!sliceC)
+									break;
+								sliceC = cv[sliceC];
+							}								
+						}
+						if (!cumulative && over && sliceA != sliceB)
+						{
+							auto sliceC = sliceB;
+							while (true)
+							{
+								auto& c = sizes[sliceC];
+								if (c > 1)
+									c--;
+								else
+									sizes.erase(sliceC);
+								if (!sliceC)
+									break;
+								sliceC = cv[sliceC];
+							}								
+						}
+						if ((over || y) && cont && !discont.count(y))
+						{
+							auto sliceC = rs[(y+z-1)%z];	
+							if (sliceC != sliceA)
+							{
+								nexts[sliceC][sliceA]++;
+								prevs[sliceA].insert(sliceC);
+							}
+						}
+					}
+				}
+				// create overlying event
+				if (ok && this->eventSparse)
+				{
+					auto& ev = this->eventSparse;
+					ev->id = eventA;
+					std::size_t n = ll->size();
+					if (n)
+					{
+						auto hr = std::make_shared<HistorySparseArray>(1,n);
+						auto rr = hr->arr;	
+						for (std::size_t i = 0; i < n; i++)						
+							rr[i] = (*ll)[i];
+						ev->state = hr;
+					}
+					else 
+						ev->state.reset();
+				}
+				if (ok && this->logging)
+				{
+					LOG "update apply\tevent id: " << eventA << "\thistory id: " << this->historyEvent << "\tslice: " << std::hex << sliceA << std::dec << "\tslice size: " << this->historySlicesSetEvent[sliceA].size() << "\ttime: " << ((sec)(clk::now() - mark)).count() << "s" UNLOG
 				}
 			}
-			if (ok && updateCallback)
+			// increment historyEvent
+			if (ok)
 			{
-				ok = ok && updateCallback(*this,eventA,historyEventA,sliceA);
+				if (this->frameUnderlyingDynamicIs)
+				{
+					this->historyFrameUnderlying.reserve(this->historySize);
+					if (this->historyEvent < this->historyFrameUnderlying.size())
+						this->historyFrameUnderlying[this->historyEvent] = this->frameUnderlyings;
+					else 
+						this->historyFrameUnderlying.push_back(this->frameUnderlyings);
+					this->historyFrameUnderlying[this->historyEvent].shrink_to_fit();
+				}
+				if (this->frameHistoryDynamicIs)
+				{
+					this->historyFrameHistory.reserve(this->historySize);
+					if (this->historyEvent < this->historyFrameHistory.size())
+						this->historyFrameHistory[this->historyEvent] = this->frameHistorys;
+					else 
+						this->historyFrameHistory.push_back(this->frameHistorys);
+					this->historyFrameHistory[this->historyEvent].shrink_to_fit();
+				}
+				historyEventA = this->historyEvent;
+				this->historyEvent++;
+				if (this->historyEvent >= this->historySize)
+				{
+					this->historyEvent = 0;
+					this->historyOverflow = true;
+				}
+				this->underlyingEventUpdated = eventA;
 			}
+		}
+		if (ok && updateCallback)
+		{
+			ok = ok && updateCallback(*this,eventA,historyEventA,sliceA);
 		}
 	} 
 	catch (const std::exception& e) 
