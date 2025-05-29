@@ -289,7 +289,7 @@ bool Alignment::Active::update(ActiveUpdateParameters pp)
 								while (s >> b)
 									b++;
 							}
-							if (b > 1)
+							if (b > 0)
 							{
 								std::size_t v = block1 + (vv1[i] << 12) + (b << 8) + rr1[i];
 								for (int k = (int)(b-1); k > 0 && !slpp.count(v); k--)
